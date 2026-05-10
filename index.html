@@ -1,0 +1,4452 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>นักเดินทางแห่งระบบสุริยะ</title>
+
+<style>
+/* =========================
+   ฟอนต์/ธีมพื้นฐาน
+   ========================= */
+@font-face{
+  font-family: 'MyGameFont';
+  src: url('image/THSarabunNew.woff2') format('woff2'),
+       url('image/THSarabunNew.woff') format('woff'),
+       url('image/THSarabunNew.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face{
+  font-family: 'MyGameFont';
+  src: url('image/THSarabunNewBold.woff2') format('woff2'),
+       url('image/THSarabunNewBold.woff') format('woff'),
+       url('image/THSarabunNewBold.ttf') format('truetype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+html, body, button, input, select, textarea {
+  font-family: 'MyGameFont', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+}
+:root{
+  --glass: rgba(0,0,0,.45);
+  --ok:#10b981; --bad:#ef4444;
+
+  /* ปรับตำแหน่ง/ขนาดวงกลมตัวเลือก 3 ปุ่มด้านบน */
+  --opt-top: 10vh;                 /* ระยะจากบน (แถวปุ่ม) */
+  --opt-size: clamp(80px, 19vw, 280px);
+  --opt-gap: 18vw;   /* ช่องว่างคงที่กว้างมาก */
+
+  /* ปรับข้อความคำถามด้านล่าง */
+  --q-bottom: 9vh;                 /* ระยะจากล่าง */
+  --q-font: clamp(50px, 10vw, 96px);
+  --q-slide-ms: 750ms;             /* เวลา slide ข้อความเข้า */
+  --q-offset-x: 22vw;              /* ระยะเริ่มเลื่อนนอกจอ (แนวนอน) */
+
+  --hud-top: 14px;
+  --safe-top: env(safe-area-inset-top,0px);
+}
+
+/* พื้นหลัง */
+html,body{ height:100%; margin:0 }
+body{
+  background:url("image/background2.png") center/cover no-repeat fixed;
+  overflow:hidden; color:#fff;
+}
+
+/* 🔥 ด่าน 4 ใช้พื้นหลังใหม่ (เฉพาะโหมดปกติ) */
+body.level4-mode:not(.camera-on){
+  background:url("image/background3.png") center/cover no-repeat fixed !important;
+}
+
+#game{ position:relative; width:100vw; height:100vh; overflow:hidden }
+
+/* =========================
+   HUD + นาฬิกา + คะแนน
+   ========================= */
+.hud{
+  position:fixed;
+  inset: calc(var(--safe-top) + var(--hud-top)) 5px auto 38px !important;
+  display:flex; align-items:center; gap:12px; justify-content:space-between;
+  pointer-events:none; z-index:40000;
+}
+body:not(.in-game):not(.prestart) .hud { display:none !important; }
+
+#clock.clock-pill{
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  z-index:16000; pointer-events:none;
+  --clock-size: 40px; font-size:var(--clock-size);
+  background:var(--glass); backdrop-filter:blur(6px); color:#fff;
+  font-weight:1000; line-height:1; border-radius:999px; padding:8px 16px;
+  box-shadow:0 4px 18px rgba(0,0,0,.25); text-shadow:0 3px 10px rgba(0,0,0,.55);
+}
+.pill{ background:var(--glass); backdrop-filter:blur(6px); padding:8px 12px; border-radius:999px; box-shadow:0 4px 18px rgba(0,0,0,.25) }
+.btn-mini{ pointer-events:auto; background:#1f2937; color:#fff; border:none; border-radius:12px; padding:8px 12px; font-weight:800; cursor:pointer; box-shadow:0 4px 18px rgba(0,0,0,.25) }
+.score-label{ 
+font-size:18px; 
+font-weight:900; 
+opacity:.95; margin:2px 0 4px; text-align:right }
+
+/* ===== Hover Effect ปุ่ม HUD ซ้าย (เมนู / หยุด / กล้อง) ===== */
+.hud .btn-mini{
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.hud .btn-mini:hover{
+  transform: scale(1.15); /* 👈 เพิ่มจาก 1.06 → 1.15 */
+  box-shadow: 
+    0 0 10px rgba(255,255,255,.25),   /* 👈 เพิ่ม glow */
+    0 14px 36px rgba(0,0,0,.55);      /* 👈 เงาเข้มขึ้น */
+}
+
+.hud .btn-mini:active{
+  transform: scale(0.9); /* 👈 กดยุบชัดขึ้น */
+}
+
+
+/* ===== Hover Effect ปุ่ม Mute / Fullscreen ===== */
+#muteBtn, #fsBtn{
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+#muteBtn:hover, #fsBtn:hover{
+  transform: scale(1.25); /* 👈 จาก 1.1 → 1.25 (เห็นชัดมาก) */
+  box-shadow: 
+    0 0 12px rgba(255,255,255,.3),
+    0 14px 36px rgba(0,0,0,.55);
+}
+
+#muteBtn:active, #fsBtn:active{
+  transform: scale(0.85);
+}
+
+
+/* ปรับตำแหน่งคำว่า "คะแนน" */
+.score-label{
+  margin-right:16px;  /* เลื่อนออกจากกล่องทอง */
+  margin-top:-6px;    /* เลื่อนขึ้นเล็กน้อย */
+}
+
+
+.pill.gold{
+  --score-size: 46px; 
+border-radius: 12px; 
+padding:6px 8px; min-width: 
+calc(var(--score-size)*1.6);
+}
+.pill.gold .num{ 
+font-size:var(--score-size); 
+font-weight:1000; 
+letter-spacing:.5px 
+}
+
+/* จัดกึ่งกลางตัวเลขในกล่องทอง */
+.pill.gold{
+  display:flex;
+  justify-content:center;  /* กึ่งกลางแนวนอน */
+  align-items:center;      /* กึ่งกลางแนวตั้ง */
+  text-align:center;
+}
+.pill.gold .num{
+  display:block;
+  width:100%;
+}
+
+
+/* ย้ายปุ่ม HUD ไปมุมซ้าย/ขวาแน่นอน */
+.hud { position: initial !important; inset:auto !important; }
+.hud .left, .hud .right{
+  position:fixed !important; top:var(--hud-top) !important; z-index:50000; pointer-events:none;
+}
+.hud .left { left: 16px !important; }
+.hud .right{ right:16px !important; }
+.hud .btn-mini{ pointer-events:auto }
+
+/* =========================
+   Welcome / Landing
+   ========================= */
+#welcome{
+  position:fixed;
+  inset:0;
+  background:url("image/welcomepage.png") center/cover no-repeat fixed;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(10px, 2vh, 24px);
+  padding:clamp(12px, 3vh, 32px) 16px;
+  box-sizing:border-box;
+  z-index:25000;
+  transition:opacity .3s ease;
+  overflow:hidden;
+}
+#welcome.hide{ opacity:0; pointer-events:none; visibility:hidden }
+
+#welcome .brand{
+  width:min(92vw, 1100px);
+  max-height:calc(100dvh - 140px);
+  margin-bottom:clamp(12px, 6vh, 100px);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex:0 1 auto;
+}
+#welcome .brand img{
+  width:100%;
+  max-width:100%;
+  max-height:min(58dvh, 620px);
+  height:auto;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 6px 18px rgba(0,0,0,.45));
+  animation:pulse 3s infinite ease-in-out;
+}
+
+#welcome #enterBtn{
+  flex:0 0 auto;
+  max-width:min(92vw, 420px);
+  padding:clamp(10px, 1.6vh, 12px) clamp(20px, 3vw, 28px);
+  font-size:clamp(20px, 3.2vw, 36px);
+  font-weight:1000;
+  border-radius:16px;
+
+  color:#fff;
+
+  /* 🔥 เปลี่ยนตรงนี้ */
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.22),
+    rgba(255,255,255,.08)
+  );
+
+  border:1px solid rgba(255,255,255,.35);
+
+  /* 👇 เพิ่ม contrast ให้ตัวหนังสือ */
+  text-shadow: 0 2px 6px rgba(0,0,0,.6);
+
+  box-shadow:0 10px 28px rgba(0,0,0,.35);
+  backdrop-filter:blur(8px);
+
+  cursor:pointer;
+  white-space:nowrap;
+}
+
+@keyframes pulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+
+#landing{
+  position:fixed;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  gap:clamp(10px, 2vh, 22px);
+  align-items:center;
+  justify-content:center;
+  padding:clamp(12px, 3vh, 32px) 16px;
+  box-sizing:border-box;
+  overflow:hidden;
+  background:url("image/welcomepage.png") center/cover no-repeat fixed;
+  z-index:20000;
+  transition:opacity .3s ease;
+}
+
+#landing.hide{ opacity:0; pointer-events:none; visibility:hidden }
+#landing .brand{
+  width:min(92vw, 1100px);
+  max-height:min(42dvh, 360px);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex:0 1 auto;
+}
+#landing .brand img{
+  width:100%;
+  max-width:100%;
+  max-height:100%;
+  height:auto;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));
+}
+.level-menu{
+  display:flex;
+  flex-direction:column;
+  gap:clamp(8px, 1.5vh, 14px);
+  width:min(92vw, 640px);
+  max-height:min(48dvh, 420px);
+  flex:0 1 auto;
+}
+
+.levelBtn{
+  width:100%;
+  min-height:clamp(48px, 7vh, 80px);
+  padding:clamp(12px, 2.2vh, 18px) clamp(16px, 2vw, 20px);
+  font-size:clamp(20px, 3.2vw, 34px);
+  font-weight:1000;
+  line-height:1.2;
+  border-radius:14px;
+
+  color:#fff;
+
+  /* 🔥 เปลี่ยนพื้นหลัง */
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.22),
+    rgba(255,255,255,.08)
+  );
+
+  border:1px solid rgba(255,255,255,.35);
+
+  /* 👇 กันตัวหนังสือจม */
+  text-shadow: 0 2px 6px rgba(0,0,0,.6);
+
+  box-shadow:0 10px 28px rgba(0,0,0,.35);
+  backdrop-filter:blur(8px);
+
+  cursor:pointer;
+  text-align:center;
+}
+/* ===== Hover Effect ปุ่มเลือกด่าน ===== */
+.levelBtn{
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.levelBtn:hover{
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.35),
+    rgba(255,255,255,.15)
+  );
+  transform: translateY(-2px);
+}
+
+.levelBtn:active{
+  transform: scale(0.97);   /* 👈 เวลากดให้ยุบ */
+}
+
+/* =========================
+   หน้าสตาร์ท / นับถอยหลัง
+   ========================= */
+#startScreen{ position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; background:#000; z-index:30000; text-align:center; padding:24px }
+#startTitle{ font-size:clamp(26px,5vw,48px); font-weight:900; margin-bottom:10px }
+
+#startBtn{ 
+  margin-top:18px;               
+  padding:16px 36px;               /* 👈 ปุ่มใหญ่ขึ้นชัดเจน */
+  font-size:clamp(22px, 4vw, 42px); 
+  border:0; 
+  border-radius:12px;           
+  font-weight:1000; 
+  cursor:pointer; 
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color:#fff;
+  box-shadow:0 14px 34px rgba(0,0,0,.4); 
+}
+
+/* ===== Hover Effect ปุ่มเริ่ม ===== */
+#startBtn{
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+#startBtn:hover{
+  transform: scale(1.18);   /* 👈 เด้งชัด */
+  box-shadow: 
+    0 0 16px rgba(255,255,255,.3),   /* glow */
+    0 18px 40px rgba(0,0,0,.6);      /* เงาเข้ม */
+}
+
+#startBtn:active{
+  transform: scale(0.9);   /* 👈 กดยุบชัด */
+}
+
+#countdown{ display:none; font-size:clamp(56px,12vw,120px); font-weight:1000; line-height:1; margin-top:8px }
+
+/* =========================
+   โครงสร้างคำถาม/คำตอบแบบใหม่
+   ========================= */
+/* แถวปุ่ม 3 วงกลมด้านบน */
+#choicesRow{
+  position:fixed; left:50%; transform:translateX(-50%);
+  top:var(--opt-top); display:flex; gap:var(--opt-gap);
+  z-index:12000; pointer-events:auto;
+}
+
+.option.circle{
+  width:var(--opt-size); height:var(--opt-size);
+  border-radius:50%;
+  /* เพิ่มเส้นขอบเข้มกว่าสีหลักเล็กน้อย */
+  border:10px solid rgba(0,0,0,0.25);
+  background:
+    radial-gradient(35% 35% at 30% 30%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%) padding-box,
+    var(--ring, linear-gradient(130deg,#999,#666)) border-box;
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+  display:grid; place-items:center; cursor:pointer; user-select:none;
+  overflow:hidden;
+}
+
+.option.circle img{ width:90%; height:90%; object-fit:contain; filter:drop-shadow(0 6px 14px rgba(0,0,0,.45)) }
+
+/* เข้า: slide-in จากด้านบนทีละปุ่ม */
+.option.circle.pre-in{ opacity:0; transform:translateY(-40px); }
+.option.circle.go-in{ opacity:1; transform:translateY(0); transition: transform 600ms cubic-bezier(.2,.9,.2,1), opacity 600ms; }
+
+/* กล่องครอบตัวเลือก 1 ชิ้น (รูปวงกลม + แคปชันด้านล่าง) */
+.option-wrap{
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+  gap:8px;
+  position:relative;
+}
+
+/* แคปชันใต้รูป – ปรับได้ด้วยตัวแปร */
+.option-wrap .opt-cap{
+  font-size: var(--cap-font, clamp(16px, 2.8vw, 24px));
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0,0,0,.6);
+  transform: translateY(var(--cap-offset-y, 0px));
+  max-width: min(22vw, 260px);
+  white-space: normal;
+}
+
+body.level2-mode .option-wrap .opt-cap{
+  display:none !important;
+}
+
+/* ออก: ปุ่มถูกเลือก → ขยายแล้วหดจนหาย */
+.option.circle.pick-pop{ animation: pickPop 620ms ease forwards; }
+@keyframes pickPop{ 0%{transform:scale(1)} 45%{transform:scale(1.15)} 100%{transform:scale(.2); opacity:0} }
+
+/* ออก: ปุ่มไม่ได้เลือก → slide-out ขึ้นด้านบน */
+.option.circle.slide-up-out{ animation: slideUpOut 560ms ease forwards; }
+@keyframes slideUpOut{ to{ transform:translateY(-60px); opacity:0 } }
+/* ให้ทั้งกล่องคำตอบ (วงกลม+แคปชัน) เป็นตัวอนิเมต */
+.option-wrap{ will-change: transform, opacity; }
+
+/* ถูกเลือก = ป๊อปขึ้นนิดนึงแล้วยุบจางหาย (วง+แคปชันพร้อมกัน) */
+.option-wrap.is-chosen .option.circle{ animation: circlePop .52s cubic-bezier(.2,.9,.2,1) forwards; }
+.option-wrap.is-chosen .opt-cap     { animation: capFadeUp .52s ease forwards; }
+
+/* ไม่ถูกเลือก = เฟดขึ้นเบา ๆ แล้วหาย (วง+แคปชันพร้อมกัน) */
+.option-wrap.is-faded  .option.circle{ animation: circleFadeUp .42s ease forwards; }
+.option-wrap.is-faded  .opt-cap      { animation: capFadeUp .42s ease forwards; }
+
+/* คีย์เฟรมที่ใช้ */
+@keyframes circlePop{
+  0%{ transform:scale(1); opacity:1 }
+  35%{ transform:scale(1.12) }
+  100%{ transform:scale(.85); opacity:0 }
+}
+@keyframes circleFadeUp{ to{ transform:translateY(-20px); opacity:0 } }
+@keyframes capFadeUp{   to{ transform:translateY(-24px); opacity:0 } }
+/* จบรอบ: ย่อทั้งกล่องแล้วค่อยหาย (กันชนกับสถานะอื่นๆ) */
+.option-wrap.is-vanish{
+  animation: wrapShrinkOut var(--vanish-ms, 420ms) ease forwards;
+}
+.option-wrap.is-vanish .option.circle{
+  animation: circleShrinkOut var(--vanish-ms, 420ms) ease forwards;
+}
+.option-wrap.is-vanish .opt-cap{
+  animation: capFadeUp var(--vanish-ms, 420ms) ease forwards;
+}
+
+@keyframes wrapShrinkOut{
+  to{ transform: scale(.88); opacity:.0; }
+}
+@keyframes circleShrinkOut{
+  to{ transform: scale(.82); opacity:0; }
+}
+
+
+/* แคปชันหายตามวง (capFadeUp ถูก define แล้วด้านบน) */
+.option-wrap.faded .opt-cap{ animation: capFadeUp 560ms ease forwards; }
+.option-wrap.chosen .opt-cap{ animation: capFadeUp 620ms ease forwards; }
+
+/* กล่องคำถามด้านล่าง: สไลด์แนวนอนเข้ามา */
+/* กล่องคำถามด้านล่าง: วิ่งแนวนอนจากขวา -> ซ้าย */
+#questionBox{
+  position:fixed;
+  left:0; right:0; bottom:var(--q-bottom);
+  width:100vw; overflow:hidden; pointer-events:none;
+  z-index:11000;
+  text-align:left; /* ไม่บังคับกลาง เพราะเราจะเลื่อนเอง */
+  white-space:nowrap;
+  /* ขนาดตัวหนังสือยังคงใช้ตัวแปรเดิม */
+  font-size:var(--q-font); font-weight:1000;
+  text-shadow:0 4px 12px rgba(0,0,0,.8);
+}
+
+#questionBox .mq{
+  display:inline-block;
+  padding-inline: 4vw;
+  will-change: transform, opacity;
+  /* ป้องกันเฟรมแรกโผล่มุมซ้ายล่าง */
+  opacity: 0;
+  transform: translateX(100vw);
+  /* ยังไม่ผูก animation ตรงนี้ รอให้ JS สั่งตอนพร้อม */
+}
+#questionBox .mq.run{
+  opacity: 1;
+  animation-name: qScrollLeft;
+  animation-timing-function: linear;
+  animation-iteration-count: 1; /* วิ่งครั้งเดียวตามที่ต้องการ */
+}
+
+/* keyframes วิ่งจากนอกจอขวา ไปจนพ้นซ้าย */
+@keyframes qScrollLeft{
+  from{ transform: translateX(100vw); }
+  to  { transform: translateX(-100%); }
+}
+
+/* เร่งข้อความออกซ้ายพร้อมจาง (ใช้ตอนผู้เล่นเลือกคำตอบ) */
+@keyframes qBoostOut{
+  to { transform: translateX(-120%); opacity: 0; }
+}
+
+/* เร่งข้อความคำถามให้ออกซ้ายพร้อมจาง (เรียกตอนผู้เล่นกดเลือก) */
+@keyframes qBoostOut{ to{ transform:translateX(-120%); opacity:0 } }
+
+/* (ล้างคลาสเก่า ถ้ายังมีติดอยู่จากรอบก่อน) */
+/* === ตราประดับใต้คำถาม === */
+:root{
+  --decor-w: 104vw; /* ปรับความกว้าง */
+  --decor-bottom: -12vh;                /* ระยะจากขอบล่าง */
+  --cap-font: clamp(24px, 5vw, 42px); /* ← เพิ่มบรรทัดนี้เพื่อคุมขนาดแคปชัน */
+}
+
+#qDecor{
+  position: fixed;
+  left: 50%;
+  bottom: var(--decor-bottom);
+  width: var(--decor-w);
+  height: auto;
+  transform: translateX(-50%);
+  /* เดิมเป็น pointer-events:none; เปลี่ยนเป็นคลิกได้ */
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 10950;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,.35));
+}
+
+/* ปิดการคลิก qDecor แต่คงเรืองแสงได้ */
+#qDecor{
+  pointer-events: none; /* ไม่รับคลิก แต่ยังแสดงและเรืองแสงได้ */
+}
+
+
+/* สถานะเชิญชวนให้กดเพื่อไปต่อ */
+#qDecor.arm-next{
+  animation: none !important;
+  filter: drop-shadow(0 0 18px rgba(255, 220, 0, .75));
+}
+@keyframes pulseNext{
+  0%,100%{ transform: translateX(-50%) scale(1.0); }
+  50%    { transform: translateX(-50%) scale(1.06); }
+}
+
+/* ปุ่มลัดสี่เหลี่ยม: ไปข้อถัดไป (ทำหน้าที่เดียวกับ object0) */
+:root{
+  /* ปรับตำแหน่ง/ขนาดได้ตามต้องการ */
+  --fast-left: 0vw;   /* ระยะจากซ้าย */
+  --fast-top: 88vh;   /* ระยะจากบน */
+  --fast-w: 1840px;    /* ความกว้าง */
+  --fast-h: 130px;     /* ความสูง */
+}
+#fastNext{
+  position: fixed;
+  left: var(--fast-left);
+  top: var(--fast-top);
+  width: var(--fast-w);
+  height: var(--fast-h);
+  display: none;               /* จะแสดงเมื่อมีคลาส .show */
+  place-items: center;
+  background: rgba(0,0,0,.5);
+  border: 3px solid rgba(255,255,255,.7);
+  border-radius: 14px;
+  color:#fff;
+  font-weight: 1000;
+  z-index: 10960;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+}
+
+#fastNext {
+  opacity: 0;          /* ทำให้โปร่งใส */
+  pointer-events: auto; /* ยังคลิกได้ (หากต้องการให้คลิกได้) */
+}
+
+#fastNext.show{ display: grid; }
+#fastNext.arm-next{ animation: none; } /* ให้อยู่นิ่งๆ */
+
+#questionBox.pre-x, #questionBox.go-x{ opacity:1; transform:none; transition:none; }
+
+
+/* ภาพประกอบ (ถ้าอยากแสดงเสริม — ซ่อนไว้ก่อน) */
+#qImg{ display:none }
+
+/* =========================
+   ด่าน 3 : Quiz ระบบสุริยะ 2 ตัวเลือก
+   ========================= */
+
+/* แถบคำถามยาวสุดจอ */
+body.level3-mode #questionBox{
+  top: clamp(82px, 12vh, 140px);
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  min-height: clamp(86px, 14vh, 150px);
+
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 14px clamp(22px, 5vw, 90px);
+  box-sizing: border-box;
+
+  text-align: center;
+  white-space: normal;
+  overflow: visible;
+
+  background: linear-gradient(135deg, rgba(14,165,233,.92), rgba(37,99,235,.92), rgba(6,182,212,.88));
+  box-shadow:
+    0 12px 34px rgba(0,0,0,.35),
+    inset 0 -4px 12px rgba(255,255,255,.12);
+
+  font-size: clamp(34px, 5.2vw, 72px);
+  font-weight: 1000;
+  line-height: 1.08;
+  z-index: 12100;
+}
+
+/* ข้อความคำถามในแถบ */
+body.level3-mode #questionBox .mq{
+  display: block;
+  width: 100%;
+  padding: 10px 18px 18px;  /* เพิ่มพื้นที่ล่างให้สระ/หางตัวอักษร */
+  box-sizing: border-box;
+
+  opacity: 1;
+  transform: none;
+  animation: none !important;
+
+  color: #fff;
+  text-shadow: 0 4px 12px rgba(0,0,0,.65);
+
+  white-space: nowrap;      /* ห้ามตัดบรรทัด */
+  overflow: visible;        /* ไม่ตัดสระล่าง */
+  line-height: 1.35;        /* เพิ่มระยะสูงของบรรทัดสำหรับภาษาไทย */
+}
+
+/* ตำแหน่งตัวเลือก 2 วงกลม */
+body.level3-mode #choicesRow{
+  top: 58%;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  transform: translateY(-50%);
+
+  justify-content: space-between;
+  align-items: center;
+  gap: 0;
+
+  padding: 0 clamp(70px, 12vw, 240px);
+  box-sizing: border-box;
+}
+
+/* กล่องครอบวงกลม */
+body.level3-mode .option-wrap{
+  width: auto;
+}
+
+/* ตัวเลือกวงกลม ไม่มีขอบ */
+body.level3-mode .option.circle{
+  width: clamp(160px, 24vw, 320px);
+  height: clamp(160px, 24vw, 320px);
+
+  border-radius: 50%;
+  border: none !important;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: clamp(14px, 2.2vw, 28px);
+  box-sizing: border-box;
+
+  color: #fff;
+  font-size: clamp(30px, 4.3vw, 58px);
+  font-weight: 1000;
+  line-height: 1.05;
+  text-align: center;
+
+  background: var(--ring, linear-gradient(135deg, #2563eb, #06b6d4));
+  box-shadow:
+    0 14px 36px rgba(0,0,0,.38),
+    inset 0 8px 18px rgba(255,255,255,.20),
+    inset 0 -10px 20px rgba(0,0,0,.18);
+}
+
+/* ไม่ใช้สี fix ซ้าย-ขวาแล้ว ให้ JS randomRing สุ่มเอง */
+body.level3-mode .option-wrap:nth-child(1) .option.circle,
+body.level3-mode .option-wrap:nth-child(2) .option.circle{
+  background: var(--ring, linear-gradient(135deg, #2563eb, #06b6d4));
+}
+
+body.level3-mode .option-wrap .opt-cap{
+  display: none !important;
+}
+
+body.level3-mode #questionBox.level3-fade-out{
+  animation: level3QuestionFadeOut 520ms ease forwards;
+}
+
+body.level3-mode #choicesRow.level3-fade-out{
+  animation: level3ChoicesFadeOut 520ms ease forwards;
+  pointer-events: none !important;
+}
+
+/* ปิดอนิเมชัน/ทรานซิชันเดิมของปุ่มตอนเฟดออก */
+body.level3-mode #choicesRow.level3-fade-out .option-wrap,
+body.level3-mode #choicesRow.level3-fade-out .option.circle{
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+/* กล่องคำถาม เฟดอย่างเดียว */
+@keyframes level3QuestionFadeOut{
+  from{ opacity: 1; }
+  to  { opacity: 0; }
+}
+
+/* แถวตัวเลือก ต้องรักษา translateY(-50%) ไว้ */
+@keyframes level3ChoicesFadeOut{
+  from{
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+  to{
+    opacity: 0;
+    transform: translateY(-50%);
+  }
+}
+
+body.level3-mode #qDecor,
+body.level3-mode #fastNext{
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* =========================
+   ด่าน 1 : Planet Viewer
+   ========================= */
+#level1Viewer{
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 11500;
+  pointer-events: none; /* ทั้งชั้นไม่รับคลิก ยกเว้นปุ่ม */
+}
+
+#level1Viewer.show{
+  display: flex;
+}
+
+#viewerStage{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* รูปเป็นวัตถุเต็มจอ แล้วเลื่อนออก/เข้าเอง */
+.viewer-photo{
+  position: fixed;
+  left: 50%;
+  top: 50%;
+
+  width: auto;
+  height: 100vh;
+  max-width: 92vw;
+  object-fit: contain;
+
+  display: block;
+  pointer-events: none;
+  user-select: none;
+
+  filter: drop-shadow(0 10px 28px rgba(0,0,0,.35));
+  opacity: 0;
+
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+}
+
+.viewer-photo.is-active{
+  opacity: 1;
+  z-index: 2;
+}
+
+/* เดินหน้า: รูปเก่าออกซ้าย / รูปใหม่เข้าจากขวา */
+.viewer-photo.slide-out-left{
+  animation: viewerImgOutLeft 2200ms linear forwards;
+}
+.viewer-photo.slide-in-left{
+  animation: viewerImgInFromRight 2200ms linear forwards;
+}
+
+/* ย้อนกลับ: รูปเก่าออกขวา / รูปใหม่เข้าจากซ้าย */
+.viewer-photo.slide-out-right{
+  animation: viewerImgOutRight 2200ms linear forwards;
+}
+.viewer-photo.slide-in-right{
+  animation: viewerImgInFromLeft 2200ms linear forwards;
+}
+
+@keyframes viewerImgOutLeft{
+  from{
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to{
+    opacity: 1;
+    transform: translate(calc(-50% - 140vw), -50%);
+  }
+}
+
+@keyframes viewerImgOutRight{
+  from{
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to{
+    opacity: 1;
+    transform: translate(calc(-50% + 140vw), -50%);
+  }
+}
+
+@keyframes viewerImgInFromRight{
+  from{
+    opacity: 1;
+    transform: translate(calc(-50% + 140vw), -50%);
+  }
+  to{
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes viewerImgInFromLeft{
+  from{
+    opacity: 1;
+    transform: translate(calc(-50% - 140vw), -50%);
+  }
+  to{
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+
+.viewer-nav{
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 11520;
+
+  width: clamp(62px, 7.5vw, 96px);
+  height: clamp(62px, 7.5vw, 96px);
+
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.55);
+
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.72),
+    rgba(255,255,255,.36)
+  );
+
+  color: rgba(15,23,42,.88);
+  font-size: clamp(34px, 4.8vw, 58px);
+  font-weight: 1000;
+  line-height: 1;
+
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+
+  box-shadow:
+    0 12px 34px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 -8px 18px rgba(255,255,255,.18);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    background .18s ease,
+    opacity .18s ease;
+}
+
+.viewer-nav.show{
+  display: flex;
+}
+
+.viewer-nav:hover{
+  transform: translateY(-50%) scale(1.1);
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.9),
+    rgba(255,255,255,.5)
+  );
+  box-shadow:
+    0 16px 42px rgba(0,0,0,.34),
+    0 0 18px rgba(255,255,255,.32);
+}
+
+.viewer-nav:active{
+  transform: translateY(-50%) scale(.95);
+}
+
+#viewerPrev{ left: 18px; }
+#viewerNext{ right: 18px; }
+
+/* ===== ปุ่ม "ข้อมูล" มุมซ้ายล่าง ===== */
+#planetInfoToggleBtn{
+  position: fixed;
+  left: clamp(16px, 3vw, 34px);
+  bottom: clamp(18px, 4dvh, 42px);
+  z-index: 11530;
+
+  display: none;
+  pointer-events: auto;
+
+  padding: 12px 26px;
+  border: 1px solid rgba(255,255,255,.65);
+  border-radius: 999px;
+
+  background: rgba(255,255,255,.72);
+  color: #111827;
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 1000;
+  cursor: pointer;
+
+  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  backdrop-filter: blur(8px);
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+#planetInfoToggleBtn.show{
+  display: block;
+}
+
+#planetInfoToggleBtn:hover{
+  transform: scale(1.06);
+  box-shadow: 0 16px 38px rgba(0,0,0,.45);
+}
+
+#planetInfoToggleBtn:active{
+  transform: scale(.96);
+}
+
+/* ===== ปุ่มข้อมูล 3 ปุ่มของด่าน 1 ===== */
+#planetInfoButtons{
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 11510;
+  pointer-events: auto;
+
+  width: 0;
+  height: 0;
+
+  display: none;
+}
+
+#planetInfoButtons.show{
+  display: block;
+}
+
+.planet-info-btn{
+  pointer-events: auto;
+  min-width: clamp(180px, 22vw, 280px);
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 16px;
+
+  background: linear-gradient(135deg, #facc15, #eab308); /* เหลือง */
+  color: #1f2937; /* ตัวหนังสือเข้ม */
+
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 1000;
+  cursor: pointer;
+
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  border: 1px solid rgba(0,0,0,.25);
+  backdrop-filter: blur(6px);
+
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+/* ===== จัดปุ่มเป็นครึ่งวงกลม ===== */
+:root{
+  --info-radius: 400px; /* 🔥 ปรับระยะห่างจากจุดกลาง */
+}
+
+.planet-info-btn{
+  --tx: 0px;
+  --ty: 0px;
+  transform: translate(-50%, -50%) translate(var(--tx), var(--ty));
+}
+
+/* บน */
+.planet-info-btn:nth-child(1){
+  position: absolute;
+  --tx: 0px;
+  --ty: calc(-1 * var(--info-radius));
+}
+
+/* ซ้าย */
+.planet-info-btn:nth-child(2){
+  position: absolute;
+  --tx: calc(-0.9 * var(--info-radius));  /* 🔥 ขยายระยะ */
+  --ty: calc(-0.7 * var(--info-radius));
+}
+
+/* ขวา */
+.planet-info-btn:nth-child(3){
+  position: absolute;
+  --tx: calc(0.9 * var(--info-radius));   /* 🔥 ขยายระยะ */
+  --ty: calc(-0.7 * var(--info-radius));
+}
+
+.planet-info-btn:hover{
+  transform: translate(-50%, -50%) 
+             translate(var(--tx), var(--ty)) 
+             scale(1.08);
+}
+
+.planet-info-btn:active{
+  transform: translate(-50%, -50%) 
+             translate(var(--tx), var(--ty)) 
+             scale(0.95);
+}
+
+/* ===== Fade + Glow ปุ่มข้อมูลด่าน 1 ===== */
+#planetInfoToggleBtn,
+.planet-info-btn{
+  opacity: 0;
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, .65));
+  box-shadow:
+    0 0 18px rgba(250, 204, 21, .75),
+    0 0 34px rgba(250, 204, 21, .45),
+    0 12px 30px rgba(0,0,0,.35);
+}
+
+#planetInfoToggleBtn.show{
+  display: block;
+  animation: planetInfoFadeIn 520ms ease forwards,
+             planetInfoGlow 1600ms ease-in-out infinite;
+}
+
+#planetInfoToggleBtn.hide-out{
+  display: block;
+  pointer-events: none;
+  animation: planetInfoFadeOut 360ms ease forwards;
+}
+
+#planetInfoButtons.show{
+  display: block;
+}
+
+#planetInfoButtons.show .planet-info-btn{
+  animation: planetInfoBtnFadeIn 520ms ease forwards,
+             planetInfoGlow 1600ms ease-in-out infinite;
+}
+
+#planetInfoButtons.hide-out{
+  display: block;
+  pointer-events: none;
+}
+
+#planetInfoButtons.hide-out .planet-info-btn{
+  animation: planetInfoBtnFadeOut 360ms ease forwards;
+}
+
+@keyframes planetInfoFadeIn{
+  from{ opacity:0; transform: translateY(14px) scale(.96); }
+  to  { opacity:1; transform: translateY(0) scale(1); }
+}
+
+@keyframes planetInfoFadeOut{
+  from{ opacity:1; transform: translateY(0) scale(1); }
+  to  { opacity:0; transform: translateY(14px) scale(.96); }
+}
+
+@keyframes planetInfoBtnFadeIn{
+  from{
+    opacity:0;
+    transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) translateY(18px) scale(.94);
+  }
+  to{
+    opacity:1;
+    transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) translateY(0) scale(1);
+  }
+}
+
+@keyframes planetInfoBtnFadeOut{
+  from{
+    opacity:1;
+    transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) translateY(0) scale(1);
+  }
+  to{
+    opacity:0;
+    transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) translateY(18px) scale(.94);
+  }
+}
+
+@keyframes planetInfoGlow{
+  0%,100%{
+    box-shadow:
+      0 0 14px rgba(250, 204, 21, .55),
+      0 0 28px rgba(250, 204, 21, .35),
+      0 12px 30px rgba(0,0,0,.35);
+  }
+  50%{
+    box-shadow:
+      0 0 26px rgba(250, 204, 21, .95),
+      0 0 52px rgba(250, 204, 21, .65),
+      0 16px 38px rgba(0,0,0,.45);
+  }
+}
+
+/* ===== หน้าต่างข้อมูลดาว ===== */
+#planetInfoModal{
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 13000;
+}
+
+#planetInfoModal.show{
+  display: block;
+}
+
+#planetInfoModal .planet-info-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.62);
+  backdrop-filter: blur(6px);
+}
+
+.planet-info-panel{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  /* ลดความกว้างจริง */
+  width: clamp(320px, 100vw, 1200px);
+  max-width: 1200px;
+
+  /* สูงไม่เกินจอจริง */
+  max-height: 92dvh;
+
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.45);
+  padding: clamp(18px, 2.4vw, 30px);
+  box-sizing: border-box;
+}
+
+
+#planetInfoClose{
+  position: absolute;
+  bottom: 18px; 
+  right: 18px;
+
+  width: clamp(64px, 6vw, 88px);   /* 👈 ใหญ่ขึ้น + responsive */
+  height: clamp(64px, 6vw, 88px);
+
+  border: 0;
+  border-radius: 999px;
+
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.25),
+    rgba(255,255,255,.08)
+  );
+
+  color: #fff;
+  font-size: clamp(32px, 3vw, 46px);  /* 👈 ตัว X ใหญ่ขึ้น */
+  font-weight: 1000;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 12px 30px rgba(0,0,0,.35),
+    0 0 16px rgba(255,255,255,.2);
+
+  border: 1px solid rgba(255,255,255,.35);
+
+  backdrop-filter: blur(8px);
+
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+/* hover */
+#planetInfoClose:hover{
+  transform: scale(1.1);
+  box-shadow:
+    0 16px 40px rgba(0,0,0,.45),
+    0 0 22px rgba(255,255,255,.35);
+}
+
+/* กด */
+#planetInfoClose:active{
+  transform: scale(0.9);
+}
+
+.planet-info-layout{
+  display: block;
+}
+
+.planet-info-left{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.planet-info-main-title{
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 1000;
+  line-height: 1.05;
+  margin-bottom: 8px;
+}
+
+.planet-info-sub-title{
+  font-size: clamp(24px, 2.8vw, 34px);
+  font-weight: 900;
+  opacity: .95;
+  margin-bottom: 14px;
+}
+
+.planet-info-highlight{
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.2;
+  box-shadow: inset 0 8px 24px rgba(255,255,255,.02);
+}
+
+.planet-info-highlight .label{
+  font-weight: 1000;
+}
+
+.planet-info-body{
+  display: grid;
+  gap: 12px;
+  flex: 0 0 auto;   /* ให้ข้อความใช้พื้นที่จริงของตัวเอง */
+}
+
+.planet-info-item{
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: clamp(22px, 2.35vw, 30px);
+  line-height: 1.25;
+}
+
+.planet-info-item .label{
+  font-weight: 1000;
+}
+
+/* ===== bodyHtml แบบกรอบเดียว ===== */
+.planet-info-item-single{
+  display: block;
+}
+
+.planet-info-item-single > div{
+  margin-bottom: 14px;
+}
+
+.planet-info-item-single > div:last-child{
+  margin-bottom: 0;
+}
+
+.planet-info-layout{
+  display: block;
+}
+
+.planet-info-gallery{
+  margin-top: 14px;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+
+  /* ใช้พื้นที่ที่เหลือจากข้อความ */
+  flex: 1 1 auto;
+  min-height: 0;
+
+  /* ล็อกไม่ให้ส่วนรูปล้นจอ */
+  max-height: 32dvh;
+}
+
+#planetInfoImage1,
+#planetInfoImage2{
+  width: 100%;
+  height: 100%;              /* 🔥 สำคัญ */
+  max-width: 100%;
+  max-height: 32dvh;
+
+  object-fit: cover;         /* 🔥 เปลี่ยนตรงนี้ */
+  object-position: center;   /* จัดกลาง */
+
+  display: block;
+}
+
+@media (max-width: 900px){
+.planet-info-panel{
+  width: min(88vw, 1200px);
+  max-width: 1200px;
+}
+
+  .planet-info-gallery{
+    grid-template-columns: 1fr;
+    max-height: 30dvh;
+  }
+
+#planetInfoImage1,
+#planetInfoImage2{
+  width: 100%;
+  height: 100%;
+  max-width: min(100%, 520px);
+  max-height: 14dvh;
+
+  object-fit: cover;   /* 🔥 */
+}
+}
+
+
+
+/* เอฟเฟกต์คะแนนลอย */
+.fly-score{
+  position:fixed; left:50%; top:50%;
+  font-weight:1000; font-size:clamp(28px,4vw,54px);
+  transform:translate(-50%,-50%); pointer-events:none; z-index:20000; opacity:0;
+  animation:flyUp 900ms ease-out forwards; text-shadow:0 4px 14px rgba(0,0,0,.45);
+}
+.fly-score.ok{ color:#10b981 } .fly-score.bad{ color:#ef4444 }
+@keyframes flyUp{
+  0%{ opacity:0; transform:translate(-50%,-40px) scale(.96) }
+  15%{ opacity:1; transform:translate(-50%,-50%) scale(1) }
+  100%{ opacity:0; transform:translate(-50%,-110px) scale(1.06) }
+}
+
+/* ปุ่ม Mute/Fullscreen */
+#muteBtn,#fsBtn{
+  position:fixed; right:12px; width:44px; height:44px; border-radius:999px;
+  background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.3);
+  color:#fff; font-size:18px; display:grid; place-items:center; cursor:pointer; z-index:50000;
+}
+#muteBtn{ bottom:12px } #fsBtn{ bottom:62px }
+
+
+/* =========================
+   หน้า “สรุปคะแนน”
+   ========================= */
+#overlay{ visibility:hidden; opacity:0; transition:.25s; position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.55); z-index:9999 }
+.result-panel{
+  --panel-bg: rgba(20,20,20,.92);
+  background:var(--panel-bg);
+  border:1px solid rgba(255,255,255,.12);
+  padding: clamp(20px, 4vw, 32px);
+  border-radius: 20px;
+  width: min(92vw, 640px);
+  display:grid; gap:14px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.55); backdrop-filter: blur(6px);
+}
+.result-title{ margin:0; font-weight:1000; font-size:clamp(28px,4.5vw,44px) }
+.badge{ font-size: clamp(56px, 10vw, 120px); line-height:1; filter: drop-shadow(0 8px 24px rgba(0,0,0,.45)) }
+.result-metrics{ display:grid; gap:12px }
+.metric{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.25) inset }
+.metric .label{ opacity:.9 } .metric .value{ font-size:clamp(28px,5.5vw,52px); font-weight:1000 }
+.result-actions{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap }
+.btn{ appearance:none; border:none; border-radius:14px; padding:12px 18px; font-weight:900; font-size:clamp(16px,2.8vw,20px); cursor:pointer; box-shadow:0 10px 28px rgba(0,0,0,.35) }
+.btn.strong{ color:#fff; background:linear-gradient(180deg,#3b82f6,#1d4ed8); border:1px solid rgba(255,255,255,.15) }
+.btn.ghost{ color:#fff; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18) }
+
+/* =========================
+   กล้อง/แคนวาส AR
+   ========================= */
+#cameraMirror{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  object-fit:cover;
+  transform:scaleX(-1);
+  z-index:-1;
+  display:none;
+  opacity:0;
+  pointer-events:none;
+  background:#000;
+}
+
+#personCanvas{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+
+  z-index:15000; /* 🔥 ดันขึ้นหน้าสุด */
+
+  pointer-events:none; /* สำคัญ ห้ามลบ */
+  display:none;
+}
+
+/* canvas ตรวจมือ/สัมผัส — ของเดิม */
+#camCanvas{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  z-index:2;
+  pointer-events:none;
+  display:none;
+}
+
+#game{ z-index:3; position:relative }
+
+/* มุมภาพประดับ (ถ้ามีไฟล์) */
+body::after{ content:""; position:fixed; top:0; left:0; width:220px; height:220px; background:url("image/button1.png") no-repeat left top/contain; pointer-events:none; z-index:10000 }
+body::before{ content:""; position:fixed; top:0; right:0; width:200px; height:200px; background:url("image/button2.png") no-repeat right top/contain; pointer-events:none; z-index:10000 }
+
+:root{
+  --flash-ok:  rgba(16,185,129,.6);  /* เขียว */
+  --flash-bad: rgba(239,68,68,.6);   /* แดง  */
+  --flash-fade-ms: 120ms;            /* ความเร็วเฟดเข้า/ออก */
+}
+
+#emojiMeteorLayer{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 60000;
+}
+
+.emoji-meteor{
+  position: fixed;
+  left: var(--x);
+  top: var(--y);
+  font-size: var(--s);
+  opacity: 0;
+  transform: translate3d(0,0,0) rotate(var(--r));
+  animation: emojiMeteorFall var(--d) linear forwards;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,.35));
+  will-change: transform, opacity;
+}
+
+@keyframes emojiMeteorFall{
+  0%{
+    opacity: 0;
+    transform: translate3d(0,0,0) rotate(var(--r)) scale(.8);
+  }
+  12%{
+    opacity: 1;
+  }
+  100%{
+    opacity: 0;
+    transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rr)) scale(1.15);
+  }
+}
+
+/* =========================
+   พื้นหลังซ้อนหลัง Banner2
+   ========================= */
+#bgLayer {
+  position: fixed;
+  inset: 0;
+  background: url("image/background2.png") center/cover no-repeat;
+  z-index: 1000; /* อยู่เหนือพื้นหลังเกม */
+}
+
+#banner2,
+#enterBtn {
+  position: relative;
+  z-index: 2000; /* อยู่เหนือ background2 */
+}
+/* ให้ bgLayer โผล่เฉพาะตอนยังไม่เข้าเกมเท่านั้น */
+body.in-game #bgLayer {
+  display: none !important;
+}
+
+body:not(.in-game) #bgLayer {
+  display: none !important;
+}
+/* ===== Hover Effect ปุ่มเข้าสู่เกม ===== */
+#welcome #enterBtn{
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  will-change: transform;
+}
+
+#welcome #enterBtn:hover{
+  transform: scale(1.06);
+  box-shadow: 0 14px 34px rgba(0,0,0,.45);
+}
+
+#welcome #enterBtn:active{
+  transform: scale(0.97);
+}
+
+
+/* ======= พรีโหลด ======= */
+#preloadOverlay{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000c; color:#fff; z-index:99999; flex-direction:column; gap:12px; font-weight:900 }
+</style>
+</head>
+<body>
+
+<!-- ==== AR Mirror ==== -->
+<video id="cameraMirror" playsinline muted></video>
+<canvas id="personCanvas"></canvas>
+<canvas id="camCanvas"></canvas>
+
+<div id="game" aria-label="สนามเกม">
+  <div id="choicesRow" aria-label="ตัวเลือกคำตอบ 3 ปุ่ม"></div>
+  <div id="questionBox" aria-live="polite"></div>
+  <img id="qDecor" src="objects2/object0.png" alt="ตกแต่งใต้คำถาม">
+  <img id="qImg" alt="ภาพประกอบ" />
+
+  <!-- ===== ด่าน 1 : Planet Viewer ===== -->
+<div id="level1Viewer" aria-label="แสดงภาพด่าน 1">
+  <button id="viewerPrev" class="viewer-nav" aria-label="ภาพก่อนหน้า">❮</button>
+
+  <div id="viewerStage">
+    <img id="viewerImgA" class="viewer-photo is-active" alt="ภาพด่าน 1">
+    <img id="viewerImgB" class="viewer-photo" alt="ภาพด่าน 1">
+  </div>
+
+<!-- ปุ่มเปิดชุดปุ่มข้อมูล -->
+<button id="planetInfoToggleBtn" aria-label="แสดงปุ่มข้อมูล">ข้อมูล</button>
+
+  <!-- ปุ่มข้อมูล 3 ปุ่ม -->
+  <div id="planetInfoButtons">
+    <button class="planet-info-btn" data-info-key="basic">ข้อมูลพื้นฐาน🌑</button>
+    <button class="planet-info-btn" data-info-key="physical">ลักษณะ🛰️</button>
+    <button class="planet-info-btn" data-info-key="orbit">วงโคจร🪐</button>
+  </div>
+
+  <button id="viewerNext" class="viewer-nav" aria-label="ภาพถัดไป">❯</button>
+</div>
+
+<!-- ===== หน้าต่างข้อมูลดาว ===== -->
+<div id="planetInfoModal" aria-hidden="true">
+  <div class="planet-info-backdrop"></div>
+
+  <div class="planet-info-panel" role="dialog" aria-modal="true" aria-label="ข้อมูลดาวเคราะห์">
+    <button id="planetInfoClose" aria-label="ปิดหน้าต่าง">✕</button>
+
+<div class="planet-info-layout">
+  <div class="planet-info-left">
+    <div id="planetInfoMainTitle" class="planet-info-main-title"></div>
+    <div id="planetInfoSubTitle" class="planet-info-sub-title"></div>
+    <div id="planetInfoHighlight" class="planet-info-highlight"></div>
+    <div id="planetInfoBody" class="planet-info-body"></div>
+
+    <!-- รูป 2 รูป ย้ายลงล่างสุด -->
+    <div id="planetInfoGallery" class="planet-info-gallery">
+      <img id="planetInfoImage1" alt="ภาพประกอบข้อมูลดาวเคราะห์ 1">
+      <img id="planetInfoImage2" alt="ภาพประกอบข้อมูลดาวเคราะห์ 2">
+    </div>
+  </div>
+</div>
+
+  </div>
+</div>
+
+  <!-- ปุ่มลัดสี่เหลี่ยม: ไปข้อถัดไป -->
+  <div id="fastNext" role="button" aria-label="ไปข้อถัดไป">NEXT</div>
+</div>
+
+<!-- ===== Welcome ===== -->
+<div id="welcome" role="dialog" aria-modal="true">
+  <div class="brand"><img src="image/banner2.png" alt="โรงงานนักประดิษฐ์"></div>
+  <button id="enterBtn">เข้าสู่เกม</button>
+</div>
+
+<!-- ===== Landing ===== -->
+<div id="landing" role="dialog" aria-modal="true" class="hide">
+  <div class="brand"><img src="image/banner2.png" alt="โรงงานนักประดิษฐ์"></div>
+  <div class="level-menu">
+    <button class="levelBtn" data-level="1">ระบบสุริยะ</button>
+       <button class="levelBtn" data-level="3">ตอบคำถามระบบสุริยะ</button>
+    <button class="levelBtn" id="guideBtn">กติกาการเล่น 📖</button>
+  </div>
+</div>
+
+<div id="bgLayer"></div>
+
+<!-- ===== Start / Countdown ===== -->
+<div id="startScreen">
+  <div id="startTitle">ภารกิจ : สำรวจระบบสุริยะ</div>
+  <button id="startBtn">เริ่ม</button>
+  <div id="countdown">3</div>
+</div>
+
+<!-- ===== Guide ===== -->
+<div id="guideScreen" style="display:none; position:fixed; inset:0; align-items:center; justify-content:center; background:url('image/background2.png') center/cover no-repeat; z-index:20001">
+  <div class="guide-wrap" style="width:min(95vw, 1200px); max-height:92vh; display:flex; flex-direction:column; gap:10px; align-items:center; justify-content:center">
+    <img src="image/guide.png" alt="คู่มือเกม" style="width:100%; height:auto; max-height:92vh; border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.55); display:block">
+    <button id="guideBack" class="btn-mini">เมนูหลัก</button>
+  </div>
+</div>
+
+<!-- ===== HUD ===== -->
+<div class="hud">
+  <div class="left">
+    <div class="stack">
+      <div style="display:flex; gap:8px;">
+        <button id="quickRestart" class="btn-mini">หน้าหลัก</button>
+        <button id="pauseBtn" class="btn-mini">⏸ หยุด</button>
+        <button id="camBtn" class="btn-mini">📷: ปิด</button>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="stack" style="align-items:flex-end">
+      <div class="score-label">คะแนน</div>
+      <div id="goldWrap" class="pill gold" aria-live="polite"><span class="num">0</span></div>
+    </div>
+  </div>
+</div>
+<div id="clock" class="clock-pill">02:00</div>
+
+<!-- ===== Overlay สรุปคะแนน ===== -->
+<div id="overlay">
+  <div class="result-panel">
+    <div class="badge" id="scoreBadge" aria-hidden="true">🏆</div>
+    <h1 class="result-title" id="endTitle">หมดเวลา</h1>
+    <div class="result-metrics">
+      <div class="metric">
+        <div class="label">คะแนน</div>
+        <div class="value"><b id="finalScore">0</b></div>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="btn strong" id="restartBtn">เริ่มใหม่</button>
+      <button class="btn ghost" id="selectLevelBtn">กลับสู่หน้าหลัก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== เสียง ===== -->
+<audio id="hitSound" preload="auto" src="image/audio1.mp3"></audio>
+<audio id="winSound" preload="auto" src="image/win2.mp3"></audio>
+<audio id="bgm" preload="auto" loop src="image/bgm3.mp3"></audio>
+<audio id="selectSound" preload="auto" src="image/select.mp3"></audio>
+<audio id="wrongSound" preload="auto" src="image/wrong.mp3"></audio>
+<audio id="beltSound" preload="auto" src="image/belt.mp3"></audio>
+
+
+
+<!-- ===== ปุ่ม Mute / Fullscreen ===== -->
+<button id="muteBtn" aria-pressed="false" title="Mute / Unmute">🔊</button>
+<button id="fsBtn" aria-pressed="false" title="เข้าสู่โหมดเต็มจอ">⛶</button>
+
+<!-- ===== ควบคุม Mute ===== -->
+<script>
+
+(function(){
+  const muteBtn = document.getElementById('muteBtn');
+  const bgm = document.getElementById('bgm');  // ← เพิ่ม
+  if(!muteBtn || !bgm) return;
+  let isMuted = false;
+  function applyMute(m){
+    isMuted = !!m;
+    bgm.muted = isMuted;                      // ← ปิดเฉพาะ bgm
+    if(isMuted){ bgm.setAttribute('muted',''); }
+    else       { bgm.removeAttribute('muted'); }
+
+    muteBtn.setAttribute('aria-pressed', String(isMuted));
+    muteBtn.textContent = isMuted ? '🔇' : '🔊';
+  }
+  muteBtn.addEventListener('click', () => applyMute(!isMuted));
+})();
+</script>
+
+<!-- ===== ควบคุม Fullscreen ===== -->
+<script>
+(function(){
+  const fsBtn = document.getElementById('fsBtn');
+  if (!fsBtn) return;
+  function fsEnabled(){ return document.fullscreenEnabled || document.webkitFullscreenEnabled || document.msFullscreenEnabled }
+  function isFull(){ return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement }
+  function requestFS(){ const el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen)?.call(el) }
+  function exitFS(){ (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen)?.call(document) }
+  function render(){ const on=!!isFull(); fsBtn.setAttribute('aria-pressed', String(on)); fsBtn.title = on ? 'ออกจากโหมดเต็มจอ' : 'เข้าสู่โหมดเต็มจอ'; fsBtn.textContent = on ? '🗗' : '⛶' }
+  if (!fsEnabled()){ fsBtn.style.display='none'; return }
+  fsBtn.addEventListener('click', () => { if(isFull()) exitFS(); else requestFS() });
+  document.addEventListener('fullscreenchange', render);
+  document.addEventListener('webkitfullscreenchange', render);
+  document.addEventListener('msfullscreenchange', render);
+  render();
+})();
+</script>
+
+<!-- ===== ระบบเกมหลัก (แนววัสดุ–วัตถุ) ===== -->
+<script>
+(()=>{
+// =========================
+// สถานะ/ตัวแปรหลัก
+// =========================
+
+window.__ALL_IMAGES_READY__ = false;
+window.currentLevel = 1;
+
+const GAME_DURATION_MS = 120000; // 2 นาที
+let gameTimerId = null, gameEndAt = 0, remainingMs = GAME_DURATION_MS;
+let running=false, ended=true, paused=false;
+let awaitingContinue=false;
+let score=0, round=0, awaitingAnswer=false;
+
+// สำหรับด่าน 3 (หลายคำตอบ)
+let remainingCorrect = new Set();
+let __multiCorrectSet = new Set();
+
+// สำหรับกันโจทย์ซ้ำของด่าน 2 และ 4
+let usedLevel2Questions = [];
+let usedLevel3Questions = [];
+let usedLevel4Questions = [];
+
+// ===== ด่าน 1 : viewer =====
+const LEVEL1_PLANETS = Array.from({ length: 10 }, (_, i) => `objects1/planet${i+1}.png`);
+const LEVEL1_START_INDEX = 3; // planet4
+let level1Index = LEVEL1_START_INDEX;
+let activeViewerSlot = 'A';
+let level1Animating = false;
+
+const PLANET_INFO_TEMPLATE = {
+  basic: {
+    mainTitle: 'ข้อมูลพื้นฐาน',
+    subTitle: 'ข้อมูลพื้นฐาน (The Essentials) + ฉายา จุดเด่น',
+    highlightHtml: '',
+    bodyHtml: `
+      <div><span class="label">ฉายา:</span> "เตาไฟแช่แข็ง"</div>
+    `
+  },
+
+  physical: {
+    mainTitle: 'ข้อมูลทางกายภาพ',
+    subTitle: 'ข้อมูลทางกายภาพ (Physical Attributes) + อุณหภูมิ + ปรากฏการณ์',
+    highlightHtml: '',
+    bodyHtml: `
+      <div><span class="label">อุณหภูมิ:</span> กลางวันร้อนจัดมาก แต่กลางคืนหนาวจัดมาก</div>
+    `
+  },
+
+  orbit: {
+    mainTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+    subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+    highlightHtml: '',
+    bodyHtml: `
+      <div><span class="label">1 ปี:</span> เพียง 88 วันโลก</div>
+    `
+  }
+};
+
+const PLANET_INFO_TEXT = {
+  planet1: structuredClone(PLANET_INFO_TEMPLATE),
+  planet2: structuredClone(PLANET_INFO_TEMPLATE),
+  planet3: structuredClone(PLANET_INFO_TEMPLATE),
+  planet4: structuredClone(PLANET_INFO_TEMPLATE),
+  planet5: structuredClone(PLANET_INFO_TEMPLATE),
+  planet6: structuredClone(PLANET_INFO_TEMPLATE),
+  planet7: structuredClone(PLANET_INFO_TEMPLATE),
+  planet8: structuredClone(PLANET_INFO_TEMPLATE),
+  planet9: structuredClone(PLANET_INFO_TEMPLATE),
+  planet10: structuredClone(PLANET_INFO_TEMPLATE)
+};
+
+// ===== planet1 ดวงอาทิตย์ (อัปเดตใหม่) =====
+PLANET_INFO_TEXT.planet1.basic = {
+  mainTitle: 'ดวงอาทิตย์ (The Sun)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวฤกษ์ (Star) ชนิดสเปกตรัม G2V (ดาวแคระเหลือง)</div>
+    <div><span class="label">ลำดับ:</span> เป็นศูนย์กลางของระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "หัวใจแห่งระบบสุริยะ" หรือ "ราชาแห่งแสงสว่าง"</div>
+    <div><span class="label">จุดเด่น (สุดขั้ว):</span> มีมวลมากถึง 99.8% ของทั้งระบบสุริยะ แรงโน้มถ่วงมหาศาลยึดเหนี่ยวดาวเคราะห์ทั้งหมดให้โคจรรอบ</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet1.physical = {
+  mainTitle: 'ดวงอาทิตย์ (The Sun)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาด:</span> เส้นผ่านศูนย์กลางประมาณ 1,392,700 กิโลเมตร (ใหญ่กว่าโลก ~109 เท่า)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> ไม่มีพื้นผิวแข็ง ประกอบด้วยไฮโดรเจน (~73%) และฮีเลียม (~25%) ชั้นที่มองเห็นเรียกว่า "โฟโตสเฟียร์"</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> มีชั้นโครโมสเฟียร์ และชั้นนอกสุดคือ "คอร์โรนา" ซึ่งแผ่กระจายออกไปไกลมาก</div>
+    <div><span class="label">อุณหภูมิ:</span> พื้นผิว ~5,500°C และแกนกลางสูงถึง ~15,000,000°C</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet1.orbit = {
+  mainTitle: 'ดวงอาทิตย์ (The Sun)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">การหมุนรอบตัวเอง:</span> หมุนแบบไม่เท่ากัน (Differential Rotation) บริเวณเส้นศูนย์สูตร ~25 วันโลก ขั้วดาว ~35 วันโลก</div>
+    <div><span class="label">วงโคจร:</span> โคจรรอบใจกลางดาราจักรทางช้างเผือก ด้วยความเร็วประมาณ 220 กม./วินาที</div>
+    <div><span class="label">บริวาร:</span> มีดาวเคราะห์ 8 ดวง รวมถึงดาวเคราะห์แคระ ดาวเคราะห์น้อย ดาวหาง และวัตถุในแถบไคเปอร์</div>
+  `
+};
+
+// ===== planet2 ดาวพุธ =====
+PLANET_INFO_TEXT.planet2.basic = {
+  mainTitle: 'ดาวพุธ (Mercury)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์หิน (Terrestrial Planet) และดาวเคราะห์ชั้นใน (Inner Planet)</div>
+    <div><span class="label">ลำดับ:</span> เป็นดาวเคราะห์ลำดับที่ 1 ในระบบสุริยะ (ใกล้ดวงอาทิตย์ที่สุด)</div>
+    <div><span class="label">ฉายา:</span> "เตาไฟแช่แข็ง" (The Frozen Fireplace)</div>
+    <div><span class="label">จุดเด่น (สุดขั้ว):</span> เป็นดาวเคราะห์ที่มีขนาด "เล็กที่สุด" ในระบบสุริยะ และมี "ความต่างของอุณหภูมิ" ระหว่างกลางวันและกลางคืนมากที่สุด เนื่องจากไม่มีชั้นบรรยากาศคอยปรับสมดุลความร้อน</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet2.physical = {
+  mainTitle: 'ดาวพุธ (Mercury)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">มวลและขนาด:</span> เส้นผ่านศูนย์กลาง 4,879 กิโลเมตร (มีขนาดประมาณ 38% ของโลก หรือประมาณ 1 ใน 3 ของโลก)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> พื้นผิวเป็นของแข็ง เต็มไปด้วยหลุมอุกกาบาต (Craters) ที่เกิดจากการพุ่งชนจำนวนมหาศาล</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> มีชั้นบรรยากาศที่เบาบางมาก ประกอบด้วยก๊าซไฮโดรเจน ฮีเลียม และโซเดียมเพียงเล็กน้อย จนไม่สามารถป้องกันอุกกาบาตหรือเก็บกักความร้อนได้</div>
+    <div><span class="label">อุณหภูมิ:</span> ด้านรับแสง (กลางวัน) ร้อนจัดถึง 430°C ด้านมืด (กลางคืน) หนาวจัดถึง -180°C</div>
+    <div><span class="label">ปรากฏการณ์:</span> ท้องฟ้าบนดาวพุธจะเป็นสีดำสนิทตลอดเวลาแม้ในเวลากลางวัน เนื่องจากไม่มีชั้นบรรยากาศให้กระเจิงแสง</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet2.orbit = {
+  mainTitle: 'ดาวพุธ (Mercury)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 58.6 วันโลก</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 88 วันโลก (เคลื่อนที่เร็วที่สุดในระบบสุริยะ)</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงเพียง 0.034° (เกือบตั้งตรง) ทำให้ดาวพุธเป็นดาวเคราะห์ที่ไม่มีฤดูกาล</div>
+    <div><span class="label">ดาวบริวาร:</span> ไม่มีดวงจันทร์บริวาร และไม่มีระบบวงแหวน</div>
+  `
+};
+
+// ===== planet3 ดาวศุกร์ =====
+PLANET_INFO_TEXT.planet3.basic = {
+  mainTitle: 'ดาวศุกร์ (Venus)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์หิน (Terrestrial Planet) และดาวเคราะห์ชั้นใน (Inner Planet)</div>
+    <div><span class="label">ลำดับ:</span> ดาวเคราะห์ลำดับที่ 2 ในระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "ฝาแฝดของโลก" (Earth's Twin)</div>
+    <div><span class="label">จุดเด่น (สุดขั้ว):</span> เป็นดาวเคราะห์ที่ "ร้อนที่สุดในระบบสุริยะ" และสว่างที่สุดบนท้องฟ้ายามค่ำคืน (รองจากดวงจันทร์)</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet3.physical = {
+  mainTitle: 'ดาวศุกร์ (Venus)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาด:</span> เส้นผ่านศูนย์กลาง 12,104 กิโลเมตร (ประมาณ 95% ของโลก)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> เป็นของแข็ง มีที่ราบกว้างใหญ่และภูเขาไฟจำนวนมาก แต่ถูกปกคลุมด้วยเมฆหนาทึบ</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> หนาแน่นมาก ประกอบด้วยคาร์บอนไดออกไซด์ ~96% ทำให้เกิดปรากฏการณ์เรือนกระจกแบบรุนแรง</div>
+    <div><span class="label">อุณหภูมิ:</span> เฉลี่ยประมาณ 460°C คงที่ทั้งกลางวันและกลางคืน</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet3.orbit = {
+  mainTitle: 'ดาวศุกร์ (Venus)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 243 วันโลก และหมุนย้อนศร (Retrograde)</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 225 วันโลก (1 วันยาวกว่า 1 ปี)</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงประมาณ 177° ทำให้แทบไม่มีฤดูกาล</div>
+    <div><span class="label">ดาวบริวาร:</span> ไม่มีดวงจันทร์ และไม่มีวงแหวน</div>
+  `
+};
+
+// ===== planet4 โลก =====
+PLANET_INFO_TEXT.planet4.basic = {
+  mainTitle: 'โลก (Earth)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์หิน (Terrestrial Planet) และดาวเคราะห์ชั้นใน (Inner Planet)</div>
+    <div><span class="label">ลำดับ:</span> เป็นดาวเคราะห์ลำดับที่ 3 ในระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "ดาวเคราะห์สีน้ำเงิน" (The Blue Planet)</div>
+    <div><span class="label">จุดเด่น:</span> เป็นดาวเคราะห์เพียงดวงเดียวในระบบสุริยะที่เหมาะต่อการดำรงอยู่ของสิ่งมีชีวิต และมีน้ำในสถานะของเหลวปกคลุมพื้นผิวเป็นบริเวณกว้าง มีความสมดุลขององค์ประกอบทางเคมีและอุณหภูมิที่เอื้อต่อการดำรงชีวิต</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet4.physical = {
+  mainTitle: 'โลก (Earth)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาด:</span> มีเส้นผ่านศูนย์กลางประมาณ 12,742 กิโลเมตร และใช้เป็นค่ามาตรฐานในการเปรียบเทียบดาวเคราะห์หินอื่น</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> พื้นผิวประมาณ 71% ปกคลุมด้วยมหาสมุทร ส่วนที่เหลือเป็นแผ่นดิน มีการเปลี่ยนแปลงจากการเคลื่อนที่ของแผ่นเปลือกโลก (Plate Tectonics)</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> ประกอบด้วย ก๊าซไนโตรเจน (78%) และ ก๊าซออกซิเจน (21%) ช่วยกรองรังสีอันตรายและป้องกันอุกกาบาตขนาดเล็ก</div>
+    <div><span class="label">อุณหภูมิ:</span> อุณหภูมิเฉลี่ยประมาณ 15°C เหมาะต่อการคงอยู่ของน้ำในสถานะของเหลว</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet4.orbit = {
+  mainTitle: 'โลก (Earth)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 23.9 ชั่วโมง (กำหนดเป็น 24 ชั่วโมงโดยประมาณ)</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 365.25 วัน</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงประมาณ 23.5° ทำให้เกิดฤดูกาล (Seasons)</div>
+    <div><span class="label">ดาวบริวาร:</span> มีดวงจันทร์ (The Moon) 1 ดวง ส่งผลต่อปรากฏการณ์น้ำขึ้น-น้ำลง และช่วยรักษาเสถียรภาพของแกนโลก</div>
+  `
+};
+
+// ===== planet5 ดาวอังคาร =====
+PLANET_INFO_TEXT.planet5.basic = {
+  mainTitle: 'ดาวอังคาร (Mars)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์หิน (Terrestrial Planet) และดาวเคราะห์ชั้นใน (Inner Planet)</div>
+    <div><span class="label">ลำดับ:</span> ดาวเคราะห์ลำดับที่ 4 ในระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "ดาวเคราะห์สีแดง" (The Red Planet)</div>
+    <div><span class="label">จุดเด่น:</span> มีลักษณะทางธรณีวิทยาที่โดดเด่นที่สุดในระบบสุริยะ เป็นที่ตั้งของ <b>ภูเขาไฟโอลิมปัส (Olympus Mons)</b> ซึ่งสูงที่สุด และ <b>หุบเขาวาลเลสมาริเนริส (Valles Marineris)</b> ซึ่งยาวและลึกที่สุดในระบบสุริยะ</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet5.physical = {
+  mainTitle: 'ดาวอังคาร (Mars)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาดและมวล:</span> มีเส้นผ่านศูนย์กลาง 6,792 กิโลเมตร (ประมาณ 53% ของโลก)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> เต็มไปด้วยฝุ่นของออกไซด์ของเหล็ก (Iron Oxide) ทำให้มีสีแดง มีร่องรอยการไหลของน้ำในอดีต และมีธารน้ำแข็งที่ขั้วดาว</div>
+    <div><span class="label">บรรยากาศ:</span> เบาบางมาก (ความกดอากาศต่ำกว่าโลก ~100 เท่า) ประกอบด้วยก๊าซคาร์บอนไดออกไซด์ (95%) เป็นหลัก</div>
+    <div><span class="label">อุณหภูมิ:</span> เฉลี่ยประมาณ -60°C ต่ำสุดถึง -125°C และอาจสูงสุดถึง 20°C</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet5.orbit = {
+  mainTitle: 'ดาวอังคาร (Mars)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 24.6 ชั่วโมง ใกล้เคียงกับโลกมาก</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 687 วันโลก</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงประมาณ 25° ทำให้เกิดฤดูกาลคล้ายโลก แต่ยาวนานกว่า</div>
+    <div><span class="label">ดาวบริวาร:</span> มี 2 ดวง ได้แก่ โฟบอส (Phobos) และ ไดมอส (Deimos) รูปร่างคล้ายดาวเคราะห์น้อย</div>
+  `
+};
+
+// ===== planet6 แถบดาวเคราะห์น้อย =====
+PLANET_INFO_TEXT.planet6.basic = {
+  mainTitle: 'แถบดาวเคราะห์น้อย (Asteroid Belt)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ข้อมูล:</span> เป็นบริเวณในอวกาศที่เต็มไปด้วยวัตถุต้นกำเนิดดาวเคราะห์ (Planetesimals) หรือเศษหินและโลหะที่หลงเหลือจากการก่อตัวของระบบสุริยะ</div>
+    <div><span class="label">ตำแหน่ง:</span> อยู่ระหว่างวงโคจรของดาวอังคารและดาวพฤหัสบดี</div>
+    <div><span class="label">ฉายา:</span> "กำแพงหินแห่งระบบสุริยะ" หรือ "สุสานดาวเคราะห์"</div>
+    <div><span class="label">จุดเด่น:</span> มีวัตถุนับล้านชิ้นโคจรอยู่ แต่มีความหนาแน่นต่ำมาก ยานอวกาศสามารถผ่านได้โดยแทบไม่มีโอกาสชน</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet6.physical = {
+  mainTitle: 'แถบดาวเคราะห์น้อย (Asteroid Belt)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาด:</span> แตกต่างกันมาก ตั้งแต่ก้อนหินขนาดเล็กไปจนถึงดาวเคราะห์น้อยขนาดใหญ่ เช่น เซเรส (Ceres) ~940 กิโลเมตร</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> ส่วนใหญ่รูปร่างไม่สมมาตร เต็มไปด้วยหลุมอุกกาบาตและฝุ่นหิน ประกอบด้วยซิลิเกต โลหะ (เหล็ก-นิกเกิล) และบางดวงมีน้ำแข็ง</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> ไม่มี เนื่องจากแรงโน้มถ่วงน้อยเกินกว่าจะกักเก็บก๊าซ</div>
+    <div><span class="label">อุณหภูมิ:</span> หนาวเย็นจัด เฉลี่ยประมาณ -73°C ถึง -108°C ขึ้นกับระยะห่างจากดวงอาทิตย์</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet6.orbit = {
+  mainTitle: 'แถบดาวเคราะห์น้อย (Asteroid Belt)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาการโคจร:</span> ดาวเคราะห์น้อยใช้เวลาโคจรรอบดวงอาทิตย์ประมาณ 3–6 ปีโลก</div>
+    <div><span class="label">การหมุนรอบตัวเอง:</span> แตกต่างกันไป บางดวงหมุนเร็วมากจนเกือบแตก บางดวงหมุนช้ามาก</div>
+    <div><span class="label">บริวาร:</span> บางดวงมีดวงจันทร์ เช่น อิดา (Ida) ที่มีบริวารชื่อ แด็กทิล (Dactyl) และบางดวงเป็นระบบคู่ (Binary Asteroids)</div>
+  `
+};
+
+// ===== planet7 ดาวพฤหัสบดี =====
+PLANET_INFO_TEXT.planet7.basic = {
+  mainTitle: 'ดาวพฤหัสบดี (Jupiter)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์แก๊ส (Gas Giant) และดาวเคราะห์ชั้นนอก (Outer Planet)</div>
+    <div><span class="label">ลำดับ:</span> ดาวเคราะห์ลำดับที่ 5 ในระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "ยักษ์ใหญ่ใจดี" หรือ "ราชาแห่งดาวเคราะห์" (King of the Planets)</div>
+    <div><span class="label">จุดเด่น:</span> เป็นดาวเคราะห์ที่มีขนาดใหญ่ที่สุดในระบบสุริยะ และมีสนามแม่เหล็กมหาศาล ทำหน้าที่เหมือนเกราะป้องกันดักจับอนุภาคอันตราย</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet7.physical = {
+  mainTitle: 'ดาวพฤหัสบดี (Jupiter)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาดและมวล:</span> เส้นผ่านศูนย์กลางประมาณ 142,984 กิโลเมตร (ใหญ่กว่าโลก ~11.2 เท่า)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> ไม่มีพื้นผิวแข็ง ส่วนใหญ่เป็นก๊าซไฮโดรเจนและฮีเลียม</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> หนาแน่น มีแถบเมฆหลากสีจากกระแสลมแรงที่พัดวนรอบดาว</div>
+    <div><span class="label">อุณหภูมิ:</span> บริเวณยอดเมฆประมาณ -110°C แต่ใจกลางร้อนกว่าพื้นผิวดวงอาทิตย์</div>
+    <div><span class="label">ปรากฏการณ์:</span> จุดแดงใหญ่ (Great Red Spot) เป็นพายุขนาดยักษ์ และแสงเหนือ-แสงใต้ (Aurora) ที่รุนแรง</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet7.orbit = {
+  mainTitle: 'ดาวพฤหัสบดี (Jupiter)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 9.9 ชั่วโมง (เร็วที่สุดในระบบสุริยะ)</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 11.86 ปีโลก</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงเพียง 3.1° ทำให้แทบไม่มีฤดูกาล</div>
+    <div><span class="label">ดาวบริวาร:</span> มีอย่างน้อย 95 ดวง รวมถึงดวงจันทร์กาลิเลียน ได้แก่ ไอโอ, ยูโรปา, แกนีมีด และคัลลิสโต</div>
+  `
+};
+
+// ===== planet8 ดาวเสาร์ =====
+PLANET_INFO_TEXT.planet8.basic = {
+  mainTitle: 'ดาวเสาร์ (Saturn)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์แก๊ส (Gas Giant) และดาวเคราะห์ชั้นนอก (Outer Planet)</div>
+    <div><span class="label">ลำดับ:</span> ดาวเคราะห์ลำดับที่ 6 ในระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "เจ้าแห่งวงแหวน" (The Ringed Planet) หรือ "อัญมณีแห่งระบบสุริยะ"</div>
+    <div><span class="label">จุดเด่น:</span> เป็นดาวเคราะห์ที่มีความหนาแน่นน้อยที่สุด และมีระบบวงแหวนที่ชัดเจนและสวยงามที่สุดในระบบสุริยะ</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet8.physical = {
+  mainTitle: 'ดาวเสาร์ (Saturn)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาดและมวล:</span> เส้นผ่านศูนย์กลางประมาณ 116,464 กิโลเมตร (ใหญ่กว่าโลก ~9.4 เท่า)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> ไม่มีพื้นผิวแข็ง ประกอบด้วยก๊าซไฮโดรเจนและฮีเลียมเป็นหลัก</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> มีแถบเมฆและพายุรุนแรง ลักษณะฟุ้งกระจายมากกว่าดาวพฤหัส</div>
+    <div><span class="label">อุณหภูมิ:</span> บริเวณยอดเมฆเฉลี่ยประมาณ -140°C</div>
+    <div><span class="label">ปรากฏการณ์:</span> พายุหกเหลี่ยม (Hexagon) ที่ขั้วเหนือ และวงแหวนที่ประกอบด้วยน้ำแข็งและหินหลายขนาด</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet8.orbit = {
+  mainTitle: 'ดาวเสาร์ (Saturn)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 10.7 ชั่วโมง (เร็วเป็นอันดับ 2 รองจากดาวพฤหัส)</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 29.4 ปีโลก</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงประมาณ 26.7° ทำให้มีฤดูกาลคล้ายโลก แต่ยาวนานกว่า (~7 ปีต่อฤดู)</div>
+    <div><span class="label">ดาวบริวาร:</span> มีมากที่สุด (~146 ดวง) เช่น ไททัน (Titan) ดวงจันทร์ขนาดใหญ่เป็นอันดับ 2 ในระบบสุริยะ</div>
+  `
+};
+
+// ===== planet9 ดาวยูเรนัส =====
+PLANET_INFO_TEXT.planet9.basic = {
+  mainTitle: 'ดาวยูเรนัส (Uranus)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์น้ำแข็งยักษ์ (Ice Giant) และดาวเคราะห์ชั้นนอก (Outer Planet)</div>
+    <div><span class="label">ลำดับ:</span> ดาวเคราะห์ลำดับที่ 7 ในระบบสุริยะ</div>
+    <div><span class="label">ฉายา:</span> "ดาวเคราะห์ขี้เกียจ" (The Sideways Planet) หรือ "เทพเจ้าแห่งท้องฟ้า"</div>
+    <div><span class="label">จุดเด่น:</span> โคจรแบบ "ตะแคงข้าง" เนื่องจากแกนเอียงถึง 98° ทำให้เหมือนกลิ้งไปบนวงโคจร</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet9.physical = {
+  mainTitle: 'ดาวยูเรนัส (Uranus)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาดและมวล:</span> เส้นผ่านศูนย์กลางประมาณ 51,118 กิโลเมตร (ใหญ่กว่าโลก ~4 เท่า)</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> ไม่มีพื้นผิวแข็ง ประกอบด้วยแก๊สและน้ำแข็งปกคลุมแกนหิน สีฟ้าอมเขียวเกิดจากก๊าซเมเทน</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> ประกอบด้วยไฮโดรเจน ฮีเลียม และเมเทน มีระบบเมฆค่อนข้างสงบ</div>
+    <div><span class="label">อุณหภูมิ:</span> หนาวที่สุดในระบบสุริยะ ต่ำสุดถึง -224°C</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet9.orbit = {
+  mainTitle: 'ดาวยูเรนัส (Uranus)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 17.2 ชั่วโมง</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 84 ปีโลก</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงถึง 98° คาดว่าเกิดจากการชนครั้งใหญ่ในอดีต</div>
+    <div><span class="label">ดาวบริวาร:</span> มี 28 ดวง เช่น มิรันดา (Miranda) และมีวงแหวนจางๆ 13 ชั้น</div>
+  `
+};
+
+// ===== planet10 ดาวเนปจูน =====
+PLANET_INFO_TEXT.planet10.basic = {
+  mainTitle: 'ดาวเนปจูน (Neptune)',
+  subTitle: 'ข้อมูลพื้นฐาน',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ประเภท:</span> ดาวเคราะห์น้ำแข็งยักษ์ (Ice Giant) และดาวเคราะห์ชั้นนอก (Outer Planet)</div>
+    <div><span class="label">ลำดับ:</span> ดาวเคราะห์ลำดับที่ 8 ในระบบสุริยะ (ไกลที่สุด)</div>
+    <div><span class="label">ฉายา:</span> "ยักษ์สีน้ำเงิน" (The Blue Giant)</div>
+    <div><span class="label">จุดเด่น:</span> เป็นดาวเคราะห์ที่มีลมแรงที่สุดในระบบสุริยะ ความเร็วลมสูงกว่า 2,000 กม./ชม.</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet10.physical = {
+  mainTitle: 'ดาวเนปจูน (Neptune)',
+  subTitle: 'ข้อมูลทางกายภาพ',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ขนาดและมวล:</span> เส้นผ่านศูนย์กลางประมาณ 49,528 กิโลเมตร เล็กกว่ายูเรนัสเล็กน้อย แต่มีความหนาแน่นมากกว่า</div>
+    <div><span class="label">ลักษณะพื้นผิว:</span> ไม่มีพื้นผิวแข็ง ประกอบด้วยมหาสมุทรของน้ำ แอมโมเนีย และเมเทนภายใต้ความดันสูง</div>
+    <div><span class="label">ชั้นบรรยากาศ:</span> ประกอบด้วยไฮโดรเจน ฮีเลียม และเมเทน มีพายุหมุนและเมฆเคลื่อนที่เร็ว</div>
+    <div><span class="label">อุณหภูมิ:</span> เฉลี่ยประมาณ -201°C แม้อยู่ไกลแต่ยังมีความร้อนจากภายใน</div>
+  `
+};
+
+PLANET_INFO_TEXT.planet10.orbit = {
+  mainTitle: 'ดาวเนปจูน (Neptune)',
+  subTitle: 'วงโคจรและการหมุนรอบตัวเอง',
+  highlightHtml: '',
+  bodyHtml: `
+    <div><span class="label">ระยะเวลาหมุนรอบตัวเอง:</span> ประมาณ 16.1 ชั่วโมง</div>
+    <div><span class="label">ระยะเวลาโคจรรอบดวงอาทิตย์:</span> ประมาณ 164.8 ปีโลก (ยาวนานที่สุด)</div>
+    <div><span class="label">ความเอียงของแกนดาว:</span> เอียงประมาณ 28.3° ทำให้มีฤดูกาลยาวนานหลายสิบปี</div>
+    <div><span class="label">ดาวบริวาร:</span> มี 16 ดวง โดยดวงสำคัญคือ ทริตัน (Triton) ซึ่งโคจรสวนทางกับการหมุนของดาว</div>
+  `
+};
+
+
+// DOM
+const game = document.getElementById('game');
+const choicesRow = document.getElementById('choicesRow');
+const qBox = document.getElementById('questionBox');
+const qDecor = document.getElementById('qDecor');
+const fastNext = document.getElementById('fastNext');
+
+const level1Viewer = document.getElementById('level1Viewer');
+const viewerStage = document.getElementById('viewerStage');
+const viewerImgA = document.getElementById('viewerImgA');
+const viewerImgB = document.getElementById('viewerImgB');
+const viewerPrev = document.getElementById('viewerPrev');
+const viewerNext = document.getElementById('viewerNext');
+
+const planetInfoButtons = document.getElementById('planetInfoButtons');
+const planetInfoToggleBtn = document.getElementById('planetInfoToggleBtn');
+const planetInfoBtnList = Array.from(document.querySelectorAll('.planet-info-btn'));
+const planetInfoModal = document.getElementById('planetInfoModal');
+const planetInfoClose = document.getElementById('planetInfoClose');
+const planetInfoMainTitle = document.getElementById('planetInfoMainTitle');
+const planetInfoSubTitle = document.getElementById('planetInfoSubTitle');
+const planetInfoHighlight = document.getElementById('planetInfoHighlight');
+const planetInfoBody = document.getElementById('planetInfoBody');
+const planetInfoGallery = document.getElementById('planetInfoGallery');
+const planetInfoImage1 = document.getElementById('planetInfoImage1');
+const planetInfoImage2 = document.getElementById('planetInfoImage2');
+
+let planetInfoRevealTimer = null;
+
+function hidePlanetInfoControls(animate = false){
+  clearTimeout(planetInfoRevealTimer);
+
+  if (!animate) {
+    planetInfoToggleBtn?.classList.remove('show','hide-out');
+    planetInfoButtons?.classList.remove('show','hide-out');
+    return;
+  }
+
+  if (planetInfoToggleBtn?.classList.contains('show')) {
+    planetInfoToggleBtn.classList.remove('show');
+    planetInfoToggleBtn.classList.add('hide-out');
+
+    setTimeout(() => {
+      planetInfoToggleBtn.classList.remove('hide-out');
+    }, 380);
+  }
+
+  if (planetInfoButtons?.classList.contains('show')) {
+    planetInfoButtons.classList.remove('show');
+    planetInfoButtons.classList.add('hide-out');
+
+    setTimeout(() => {
+      planetInfoButtons.classList.remove('hide-out');
+    }, 380);
+  }
+}
+
+function startPlanetInfoRevealTimer(){
+  clearTimeout(planetInfoRevealTimer);
+  hidePlanetInfoControls(false);
+
+  // เริ่มโหลดรูปข้อมูลของดาวดวงปัจจุบันทันที ระหว่างรอปุ่มข้อมูลขึ้น
+  preloadCurrentPlanetInfoImages();
+
+  planetInfoRevealTimer = setTimeout(() => {
+    const waitUntilLoaded = setInterval(() => {
+      if (
+        currentPlanetInfoLoaded &&
+        window.currentLevel === 1 &&
+        level1Viewer?.classList.contains('show') &&
+        !ended
+      ) {
+        clearInterval(waitUntilLoaded);
+        planetInfoToggleBtn?.classList.remove('hide-out');
+        planetInfoToggleBtn?.classList.add('show');
+      }
+
+      if (
+        ended ||
+        window.currentLevel !== 1 ||
+        !level1Viewer?.classList.contains('show')
+      ) {
+        clearInterval(waitUntilLoaded);
+      }
+    }, 100);
+  }, 10000);
+}
+
+planetInfoToggleBtn?.addEventListener('click', () => {
+  if (!planetInfoButtons || !planetInfoToggleBtn) return;
+
+  // แสดง 3 ปุ่ม
+  planetInfoButtons.classList.remove('hide-out');
+  planetInfoButtons.classList.add('show');
+
+  // ซ่อนปุ่ม "ข้อมูล" ซ้ายล่างไปเลย
+  planetInfoToggleBtn.classList.remove('show');
+  planetInfoToggleBtn.classList.add('hide-out');
+
+  setTimeout(() => {
+    planetInfoToggleBtn.classList.remove('hide-out');
+  }, 380);
+});
+
+fastNext?.addEventListener('click', ()=>{
+  // 🔥 ซ่อนปุ่มข้อมูลทุกครั้งก่อนเปลี่ยนดาว
+  planetInfoButtons?.classList.remove('show');
+  planetInfoButtons?.classList.remove('hide-out');
+
+  planetInfoToggleBtn?.classList.remove('show');
+  planetInfoToggleBtn?.classList.remove('hide-out');
+  if (ended || !awaitingContinue) return;
+  awaitingContinue = false;
+  syncFastNextUI(); // ซ่อนสถานะ “พร้อมไปต่อ”
+  if (beltSound) { try{ beltSound.currentTime = 0; beltSound.muted = isGlobalMuted(); beltSound.play?.(); }catch(_){} }
+  nextRound();
+});
+
+
+/* จัดวาง qDecor ให้อยู่กึ่งกลางใต้กล่องคำถาม (ไม่ใช่ตามตัววิ่ง) */
+function positionDecorUnderQuestion(){
+  if(!qDecor) return;
+  const r = qBox.getBoundingClientRect();
+  const offsetX = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--decor-offset-x')
+      || '0'
+  ) || 0;
+
+  // วางกึ่งกลางตามกรอบของกล่องคำถาม
+  const centerX = r.left + (r.width/2) + offsetX;
+  // ใช้ left เป็นพิกัดจริง (ไม่ใช้ transform อีก เพื่อให้ควบคุมแม่นยำ)
+  qDecor.style.transform = 'translateX(0)';
+  qDecor.style.left = Math.round(centerX - (qDecor.offsetWidth/2)) + 'px';
+  // bottom ใช้จากตัวแปร CSS อยู่แล้ว
+}
+
+function syncFastNextUI(){
+  if (awaitingContinue && !ended){
+    fastNext?.classList.add('show','arm-next');
+    qDecor?.classList.add('arm-next');
+  }else{
+    fastNext?.classList.remove('show','arm-next');
+    qDecor?.classList.remove('arm-next');
+  }
+}
+
+function clearLevel1Everything(){
+  clearTimeout(planetInfoRevealTimer);
+  planetInfoRevealTimer = null;
+
+  closePlanetInfoModal(false);
+  hidePlanetInfoControls(false);
+
+  level1Viewer?.classList.remove('show');
+  viewerPrev?.classList.remove('show');
+  viewerNext?.classList.remove('show');
+
+  if (viewerPrev) viewerPrev.style.display = '';
+  if (viewerNext) viewerNext.style.display = '';
+
+  level1Animating = false;
+  level1Index = LEVEL1_START_INDEX;
+  activeViewerSlot = 'A';
+
+  if (viewerImgA){
+    viewerImgA.className = 'viewer-photo';
+    viewerImgA.removeAttribute('src');
+    viewerImgA.style.opacity = '';
+  }
+
+  if (viewerImgB){
+    viewerImgB.className = 'viewer-photo';
+    viewerImgB.removeAttribute('src');
+    viewerImgB.style.opacity = '';
+  }
+
+  if (planetInfoImage1) planetInfoImage1.removeAttribute('src');
+  if (planetInfoImage2) planetInfoImage2.removeAttribute('src');
+
+  currentPlanetInfoLoaded = false;
+}
+
+// =========================
+// ด่าน 1 : Planet Viewer
+// =========================
+function hideLevel1Viewer(){
+  level1Viewer?.classList.remove('show');
+  viewerPrev?.classList.remove('show');
+  viewerNext?.classList.remove('show');
+
+  if (viewerPrev) viewerPrev.style.display = '';
+  if (viewerNext) viewerNext.style.display = '';
+
+  closePlanetInfoModal();
+
+  level1Animating = false;
+  if (viewerImgA) viewerImgA.className = 'viewer-photo';
+  if (viewerImgB) viewerImgB.className = 'viewer-photo';
+}
+
+function syncLevel1Nav(){
+  if (!viewerPrev || !viewerNext) return;
+
+  const atStart = level1Index <= 0;
+  const atEnd   = level1Index >= LEVEL1_PLANETS.length - 1;
+
+  viewerPrev.style.display = atStart ? 'none' : 'flex';
+  viewerNext.style.display = atEnd   ? 'none' : 'flex';
+}
+
+function showLevel1Viewer(){
+  if (!level1Viewer || !viewerImgA || !viewerImgB) return;
+
+  choicesRow.style.display = 'none';
+  qBox.textContent = '';
+  qBox.style.display = 'none';
+  qDecor.style.display = 'none';
+  fastNext.classList.remove('show','arm-next');
+  fastNext.style.display = 'none';
+
+  level1Viewer.classList.add('show');
+  viewerPrev.classList.add('show');
+  viewerNext.classList.add('show');
+
+  level1Index = LEVEL1_START_INDEX; // เริ่มที่ planet4 เสมอ
+  activeViewerSlot = 'A';
+  level1Animating = false;
+
+  viewerImgA.className = 'viewer-photo';
+  viewerImgA.style.opacity = '0'; // ซ่อนก่อน รอโหลด
+  viewerImgB.className = 'viewer-photo';
+
+  const firstSrc = LEVEL1_PLANETS[level1Index];
+  preloadOne(firstSrc).then(() => {
+    const img = new Image();
+    img.src = firstSrc;
+    const show = () => {
+      viewerImgA.src = firstSrc;
+      viewerImgA.className = 'viewer-photo is-active';
+      viewerImgA.style.opacity = '';
+    };
+    img.decode ? img.decode().catch(() => {}).finally(show) : show();
+  });
+  viewerImgB.src = '';
+
+  syncLevel1Nav();
+  startPlanetInfoRevealTimer(); // ✅ เริ่มนับ 10 วิ ตอนเปิดดาวแรก
+}
+
+function updateLevel1Viewer(step){
+  if (!LEVEL1_PLANETS.length || level1Animating) return;
+  closePlanetInfoModal(false);
+  hidePlanetInfoControls(false);
+  const oldIndex = level1Index;
+  const newIndex = oldIndex + step;
+
+  if (newIndex < 0 || newIndex >= LEVEL1_PLANETS.length) {
+    syncLevel1Nav();
+    return;
+  }
+
+  level1Animating = true;
+  level1Index = newIndex;
+
+  const currentImg = (activeViewerSlot === 'A') ? viewerImgA : viewerImgB;
+  const nextImg    = (activeViewerSlot === 'A') ? viewerImgB : viewerImgA;
+
+  const goNext = step > 0;
+
+  // ซ่อนรูปใหม่ก่อน ให้โหลดเสร็จก่อนแสดง
+  nextImg.style.opacity = '0';
+  nextImg.className = 'viewer-photo';
+  currentImg.className = 'viewer-photo is-active';
+
+  const startSlide = () => {
+    void nextImg.offsetWidth; // reflow
+
+    nextImg.style.opacity = '';
+
+    if (goNext){
+      currentImg.classList.add('slide-out-left');
+      nextImg.classList.add('slide-in-left');
+    } else {
+      currentImg.classList.add('slide-out-right');
+      nextImg.classList.add('slide-in-right');
+    }
+
+    const onDone = ()=>{
+      currentImg.className = 'viewer-photo';
+      nextImg.className = 'viewer-photo is-active';
+      activeViewerSlot = (activeViewerSlot === 'A') ? 'B' : 'A';
+      level1Animating = false;
+      syncLevel1Nav();
+      startPlanetInfoRevealTimer(); // ✅ เปลี่ยนดาวเสร็จแล้ว เริ่มนับ 10 วิใหม่
+    };
+
+    nextImg.addEventListener('animationend', onDone, { once:true });
+  };
+
+  // ใช้ cache ถ้าโหลดแล้ว มิฉะนั้นรอ onload
+  const cached = __imgMemo.get(LEVEL1_PLANETS[newIndex]);
+  if (cached) {
+    nextImg.src = LEVEL1_PLANETS[newIndex];
+    // รูปน่าจะอยู่ใน browser cache แล้ว – รอ 1 เฟรมก็พอ
+    requestAnimationFrame(startSlide);
+  } else {
+    nextImg.src = '';
+    nextImg.onload = () => { nextImg.onload = null; startSlide(); };
+    nextImg.onerror = () => { nextImg.onerror = null; startSlide(); };
+    nextImg.src = LEVEL1_PLANETS[newIndex];
+  }
+}
+
+viewerPrev?.addEventListener('click', (e)=>{
+  planetInfoButtons?.classList.remove('show');
+  planetInfoButtons?.classList.remove('hide-out');
+
+  planetInfoToggleBtn?.classList.remove('show');
+  planetInfoToggleBtn?.classList.remove('hide-out');
+  e.stopPropagation();
+  if (ended || window.currentLevel !== 1) return;
+  updateLevel1Viewer(-1);
+});
+
+viewerNext?.addEventListener('click', (e)=>{
+  planetInfoButtons?.classList.remove('show');
+  planetInfoButtons?.classList.remove('hide-out');
+
+  planetInfoToggleBtn?.classList.remove('show');
+  planetInfoToggleBtn?.classList.remove('hide-out');
+  e.stopPropagation();
+  if (ended || window.currentLevel !== 1) return;
+  updateLevel1Viewer(1);
+});
+
+function getCurrentPlanetKey(){
+  return `planet${level1Index + 1}`;
+}
+
+function getCurrentPlanetInfoImages(infoKey){
+  const planetKey = getCurrentPlanetKey();
+  const planetNum = Number(planetKey.replace('planet',''));
+
+  // 🔥 แก้ตรงนี้
+  const folder = `info${planetNum}`;
+
+  return [
+    `${folder}/p${planetNum}-${infoKey}-1.png`,
+    `${folder}/p${planetNum}-${infoKey}-2.png`
+  ];
+}
+
+let currentPlanetInfoLoaded = false;
+let currentPlanetInfoPreloadToken = 0;
+
+function preloadCurrentPlanetInfoImages(){
+  const token = ++currentPlanetInfoPreloadToken;
+  const planetKey = getCurrentPlanetKey();
+  const infoKeys = ['basic', 'physical', 'orbit'];
+  const urls = infoKeys.flatMap(key => getCurrentPlanetInfoImages(key));
+
+  currentPlanetInfoLoaded = false;
+
+  const jobs = urls.map(src => {
+    // ใช้ preloadOne (มี cache + retry) แล้วต่อด้วย decode เพื่อให้ GPU พร้อม
+    return preloadOne(src).then(ok => {
+      if (!ok) return false;
+      // decode ภาพเพื่อให้พร้อมแสดงทันที ไม่มีกระตุก
+      const img = new Image();
+      img.src = src;
+      return img.decode ? img.decode().catch(() => true) : Promise.resolve(true);
+    });
+  });
+
+  Promise.allSettled(jobs).then(() => {
+    if (token !== currentPlanetInfoPreloadToken) return;
+    currentPlanetInfoLoaded = true;
+    console.log('✅ preload planet info complete:', planetKey, urls);
+  });
+}
+
+function openPlanetInfoModal(infoKey){
+  const planetKey = getCurrentPlanetKey();
+  const planetPack = PLANET_INFO_TEXT[planetKey];
+  const info = planetPack?.[infoKey];
+
+  if (!info || !planetInfoModal) return;
+
+  // ซ่อนปุ่มข้อมูล 3 ปุ่มก่อนเปิดหน้าต่าง
+  if (planetInfoButtons?.classList.contains('show')) {
+    planetInfoButtons.classList.remove('show');
+    planetInfoButtons.classList.add('hide-out');
+
+    setTimeout(() => {
+      planetInfoButtons.classList.remove('hide-out');
+    }, 380);
+  }
+
+  planetInfoMainTitle.innerHTML = info.mainTitle;
+  planetInfoSubTitle.innerHTML = info.subTitle;
+
+  if (info.highlightHtml && info.highlightHtml.trim()) {
+    planetInfoHighlight.innerHTML = info.highlightHtml;
+    planetInfoHighlight.style.display = '';
+  } else {
+    planetInfoHighlight.innerHTML = '';
+    planetInfoHighlight.style.display = 'none';
+  }
+
+  if (info.bodyHtml){
+    planetInfoBody.innerHTML = `
+      <div class="planet-info-item planet-info-item-single">
+        ${info.bodyHtml}
+      </div>
+    `;
+  } else if (info.body && Array.isArray(info.body)) {
+    planetInfoBody.innerHTML = info.body.map(item => `
+      <div class="planet-info-item">
+        <span class="label">${item.label}:</span> ${item.value}
+      </div>
+    `).join('');
+  } else {
+    planetInfoBody.innerHTML = '';
+  }
+
+  const [img1src, img2src] = getCurrentPlanetInfoImages(infoKey);
+
+  if (planetInfoGallery) planetInfoGallery.style.display = '';
+
+  // ภาพถูก preload ไว้แล้วใน __imgMemo – ใส่ src ตรงได้เลย
+  if (planetInfoImage1) {
+    planetInfoImage1.src = img1src;
+    planetInfoImage1.style.display = '';
+  }
+
+  if (planetInfoImage2) {
+    planetInfoImage2.src = img2src;
+    planetInfoImage2.style.display = '';
+  }
+
+  planetInfoModal.classList.add('show');
+  planetInfoModal.setAttribute('aria-hidden', 'false');
+}
+
+function closePlanetInfoModal(restoreButtons = true){
+  if (!planetInfoModal) return;
+
+  planetInfoModal.classList.remove('show');
+  planetInfoModal.setAttribute('aria-hidden', 'true');
+
+  // ถ้าปิด modal เอง ค่อยให้ 3 ปุ่มกลับมา
+  // แต่ถ้าเปลี่ยนดาว จะส่ง false มา เพื่อกันปุ่มเด้ง
+  if (
+    restoreButtons &&
+    window.currentLevel === 1 &&
+    level1Viewer?.classList.contains('show') &&
+    !ended
+  ) {
+    planetInfoButtons?.classList.remove('hide-out');
+    planetInfoButtons?.classList.add('show');
+  }
+}
+
+planetInfoBtnList.forEach(btn => {
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if (ended || window.currentLevel !== 1) return;
+    openPlanetInfoModal(btn.dataset.infoKey);
+  });
+});
+
+planetInfoClose?.addEventListener('click', closePlanetInfoModal);
+
+planetInfoModal?.querySelector('.planet-info-backdrop')?.addEventListener('click', closePlanetInfoModal);
+
+window.addEventListener('resize', positionDecorUnderQuestion);
+window.addEventListener('load', positionDecorUnderQuestion);
+
+const qImg = document.getElementById('qImg');
+const overlay = document.getElementById('overlay');
+const finalScoreEl = document.getElementById('finalScore');
+const restartBtn = document.getElementById('restartBtn');
+const selectLevelBtn = document.getElementById('selectLevelBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const goldWrap = document.getElementById('goldWrap');
+const clockEl = document.getElementById('clock');
+const hudRight = document.querySelector('.hud .right');
+
+function syncHudByLevel(){
+  const isLevel1 = (window.currentLevel === 1);
+
+  if (clockEl){
+    clockEl.style.display = isLevel1 ? 'none' : '';
+  }
+
+  if (goldWrap){
+    goldWrap.style.display = isLevel1 ? 'none' : '';
+  }
+
+  if (hudRight){
+    hudRight.style.display = isLevel1 ? 'none' : '';
+  }
+}
+
+// ===== ตั้งข้อความคำถามแบบวิ่งแนวนอน =====
+function setQuestionMarquee(text){
+  qBox.textContent = '';
+  const span = document.createElement('span');
+  span.className = 'mq';
+  span.textContent = String(text || '').trim();
+  qBox.appendChild(span);
+
+  const speedPxPerSec = 120;
+
+  requestAnimationFrame(() => {
+    const textW = span.getBoundingClientRect().width || 0;
+    const viewW = innerWidth || qBox.clientWidth || 0;
+    const distance = textW + viewW;
+    const durSec = distance / speedPxPerSec;
+
+span.style.animationDuration = durSec + 's';
+span.classList.remove('run');  // กันค่าจากรอบก่อน
+void span.offsetWidth;         // reflow ให้แน่ใจว่า opacity/transform ถูกใช้ก่อน
+span.classList.add('run');     // ค่อย “เริ่ม” แอนิเมชันเมื่อพร้อม
+
+// จับเวอร์ชันโทเคนไว้ กัน callback เก่า
+const myTok = __mqToken;
+
+span.addEventListener('animationend', () => {
+  // ถ้าโทเคนไม่ตรง แสดงว่าโดน stop/เริ่มใหม่ไปแล้ว → ไม่ทำงานซ้ำ
+  if (myTok !== __mqToken) return;
+
+  if (!ended) {
+    awaitingAnswer = false;
+    // ฆ่าตัววิ่งให้ขาด ไม่ให้มีโอกาสเด้งกลับ
+    stopMarquee();
+    // เล่นเอฟเฟกต์ย่อเล็กลงแล้วหายกับ “ทุกช้อยส์”
+    vanishAllChoices(1200); // ← ปรับความเร็วได้ เช่น 360 / 520 ms
+    qBox.textContent = ''; // กันเหลือเศษข้อความ
+    awaitingContinue = true;
+    qDecor?.classList.add('arm-next');
+    syncFastNextUI();
+  }
+}, { once: true });
+
+
+  });
+}
+
+// เร่งข้อความคำถามให้พุ่งออกซ้ายอย่างไว
+function boostQuestionOutFast(ms=280){
+  const span = qBox.querySelector('.mq');
+  if(!span) return;
+
+  const cs = getComputedStyle(span);
+  let tx = 0;
+  const m = cs.transform || cs.webkitTransform || 'none';
+  if (m && m !== 'none') {
+    const mm = m.match(/matrix\(([^)]+)\)/);
+    if (mm) {
+      const parts = mm[1].split(',').map(parseFloat);
+      tx = parts[4] || 0; // a,b,c,d, tx, ty
+    }
+  }
+
+  span.style.animation = 'none';
+  span.style.willChange = 'transform, opacity';
+  span.style.transform = `translateX(${tx}px)`;
+  span.getBoundingClientRect(); // reflow
+
+  const r  = span.getBoundingClientRect();
+  const pr = qBox.getBoundingClientRect();
+  const delta = (pr.left - r.right) - 20; // เผื่อเลยซ้าย 20px
+
+  span.style.transition = `transform ${ms}ms linear, opacity ${ms}ms linear`;
+  span.style.transform  = `translateX(${tx + delta}px)`;
+  span.style.opacity    = '0.2';
+
+  span.addEventListener('transitionend', () => { span.remove(); }, { once:true });
+}
+
+
+// เสียง
+const hitSound = document.getElementById('hitSound');
+const winSound = document.getElementById('winSound');
+const bgm = document.getElementById('bgm');
+const selectSound = document.getElementById('selectSound');
+const wrongSound = document.getElementById('wrongSound');
+const beltSound  = document.getElementById('beltSound');
+
+
+// ตั้งค่าเป็นตัวเลขอย่างง่าย (แก้เลขได้ตามใจ โดยไม่เสี่ยง syntax พัง)
+const VOL_BGM   = 0.35;
+const VOL_SELECT= 1.00;
+const VOL_HIT   = 0.60;
+const VOL_WIN   = 0.90;
+const VOL_WRONG = 1.00;
+const VOL_BELT  = 0.80;
+
+
+// ป้องกันพังด้วยการ clamp 0..1
+function v(x){ x=Number(x); return (isFinite(x)? Math.max(0,Math.min(1,x)) : 1); }
+
+if (bgm)         bgm.volume         = v(VOL_BGM);
+if (selectSound) selectSound.volume = v(VOL_SELECT);
+if (hitSound)    hitSound.volume    = v(VOL_HIT);
+if (winSound)    winSound.volume    = v(VOL_WIN);
+if (wrongSound)  wrongSound.volume  = v(VOL_WRONG);
+if (beltSound)   beltSound.volume   = v(VOL_BELT);
+
+/* ===== Bank: รูปวัสดุ =====
+   แก้ path ให้ตรงไฟล์จริงของคุณได้ (ชั่วคราวใช้ไฟล์เดิมที่มีอยู่ก็ได้) */
+const MATERIAL_IMG = {
+  'ใบ': 'image/leaf.png',
+  'ลำต้น': 'image/stem.png',
+  'ราก': 'image/root.png',
+  'ดอก': 'image/flower.png',
+  'ผลและเมล็ด': 'image/fruit_seed.png'
+};
+
+const rand=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
+const pick=(arr)=>arr[rand(0,arr.length-1)];
+const shuffle=(arr)=>{ const A=arr.slice(); for(let i=A.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [A[i],A[j]]=[A[j],A[i]] } return A };
+
+function isGlobalMuted(){ const a=document.querySelector('audio'); return !!a && a.muted===true }
+function playSfx(el,vol){ try{ const n=el?.cloneNode(true); if(!n)return; n.volume=(typeof vol==='number')?Math.max(0,Math.min(1,vol)):(el.volume??1); n.muted=isGlobalMuted(); n.play?.(); }catch(_){} }
+function renderGold(n){ goldWrap.innerHTML = `<span class="num">${Number(n)||0}</span>`; }
+
+// นาฬิกาบน HUD
+let clockUIItv=null, clockState='idle';
+function fmtClock(ms){ const t=Math.max(0,Math.ceil(ms/1000)); const m=String(Math.floor(t/60)).padStart(2,'0'); const s=String(t%60).padStart(2,'0'); return m+':'+s; }
+function renderClock(){ const ms=(clockState==='run')?Math.max(0,(gameEndAt-performance.now())):remainingMs; clockEl.textContent=fmtClock(ms); }
+function startClockUI(){ clockState='run'; if(!clockUIItv) clockUIItv=setInterval(renderClock,250); renderClock(); }
+function pauseClockUI(){ clockState='pause'; if(clockUIItv){ clearInterval(clockUIItv); clockUIItv=null; } renderClock(); }
+function stopClockUI(){ clockState='end'; if(clockUIItv){ clearInterval(clockUIItv); clockUIItv=null; } renderClock(); }
+function resetClockUI(){ clockState='idle'; if(clockUIItv){ clearInterval(clockUIItv); clockUIItv=null; } clockEl.textContent=fmtClock(GAME_DURATION_MS); }
+
+// เอฟเฟกต์ตอบถูก/ผิด: ฝนอีโมจิดาวตก
+let __emojiMeteorTimer = null;
+
+function flyScore(ok){
+  const layer = document.getElementById('emojiMeteorLayer');
+  if (!layer) return;
+
+  layer.innerHTML = '';
+  clearTimeout(__emojiMeteorTimer);
+
+  const correctSets = [
+    ['🌕'],
+    ['🌎','🌍','🌏'],
+    ['⭐','🌟']
+  ];
+
+  const wrongSets = [
+    ['🌑']
+  ];
+
+  const emojiSet = ok ? pick(correctSets) : pick(wrongSets);
+  const count = ok ? 34 : 26;
+
+  for (let i = 0; i < count; i++){
+    const e = document.createElement('div');
+    e.className = 'emoji-meteor';
+    e.textContent = pick(emojiSet);
+
+    const startX = rand(-20, 105);
+    const startY = rand(-28, 22);
+    const size = rand(26, 76);
+        const dur = rand(1600, 2300);
+        const dx = rand(240, 560);
+        const dy = rand(520, 900);
+    const rot1 = rand(-80, 80);
+    const rot2 = rot1 + rand(180, 760);
+
+    e.style.setProperty('--x', startX + 'vw');
+    e.style.setProperty('--y', startY + 'vh');
+    e.style.setProperty('--s', size + 'px');
+    e.style.setProperty('--d', dur + 'ms');
+    e.style.setProperty('--dx', dx + 'px');
+    e.style.setProperty('--dy', dy + 'px');
+    e.style.setProperty('--r', rot1 + 'deg');
+    e.style.setProperty('--rr', rot2 + 'deg');
+
+    e.style.animationDelay = rand(0, 220) + 'ms';
+
+    layer.appendChild(e);
+  }
+
+  __emojiMeteorTimer = setTimeout(()=>{
+    layer.innerHTML = '';
+  }, 2000);
+}
+
+const LEVEL1_BINDINGS = {};
+
+
+const LEVEL2_BINDINGS = {};
+
+const OBJECTS = [];
+
+// ===== ด่าน 3: คำถามที่ “ถูกได้หลายตัวเลือก” =====
+const BODY_ANSWERS = [];
+
+const LEVEL3_BANK = [];
+
+// ลำดับวัสดุอ้างอิงให้ตรงกับที่ใช้ใน LEVEL3_BANK
+const MATERIAL_ORDER = ['ของแข็ง','ของเหลว','แก๊ส'];
+
+const LEVEL4_BANK = [
+  {
+    questionText: 'สร้างอาหาร',
+    answers: [
+      { type:'material', name:'ใบ', caption:'ใบ', img: MATERIAL_IMG['ใบ'] },
+      { type:'material', name:'ลำต้น', caption:'ลำต้น', img: MATERIAL_IMG['ลำต้น'] },
+      { type:'material', name:'ราก', caption:'ราก', img: MATERIAL_IMG['ราก'] },
+      { type:'material', name:'ดอก', caption:'ดอก', img: MATERIAL_IMG['ดอก'] },
+      { type:'material', name:'ผลและเมล็ด', caption:'ผลและเมล็ด', img: MATERIAL_IMG['ผลและเมล็ด'] }
+    ],
+    correctIndices: [0]
+  },
+
+  {
+    questionText: 'ดูดซึมน้ำ',
+    answers: [
+      { type:'material', name:'ใบ', caption:'ใบ', img: MATERIAL_IMG['ใบ'] },
+      { type:'material', name:'ลำต้น', caption:'ลำต้น', img: MATERIAL_IMG['ลำต้น'] },
+      { type:'material', name:'ราก', caption:'ราก', img: MATERIAL_IMG['ราก'] },
+      { type:'material', name:'ดอก', caption:'ดอก', img: MATERIAL_IMG['ดอก'] },
+      { type:'material', name:'ผลและเมล็ด', caption:'ผลและเมล็ด', img: MATERIAL_IMG['ผลและเมล็ด'] }
+    ],
+    correctIndices: [2]
+  },
+];
+
+
+const LEVEL3_SOLAR_QUIZ = [
+  {
+    questionText: 'ดาวเคราะห์ดวงใดอยู่ใกล้ดวงอาทิตย์ที่สุด',
+    correct: 'ดาวพุธ',
+    wrongs: ['ดาวศุกร์', 'โลก', 'ดาวอังคาร', 'ดาวเนปจูน']
+  },
+  {
+    questionText: 'ดาวเคราะห์ดวงใดได้รับฉายาว่า “ดาวเคราะห์สีน้ำเงิน”',
+    correct: 'โลก',
+    wrongs: ['ดาวศุกร์', 'ดาวพฤหัสบดี', 'ดาวยูเรนัส', 'ดาวอังคาร']
+  },
+  {
+    questionText: 'ดาวเคราะห์ดวงใดร้อนที่สุดในระบบสุริยะ',
+    correct: 'ดาวศุกร์',
+    wrongs: ['ดาวพุธ', 'โลก', 'ดาวอังคาร', 'ดาวเสาร์']
+  },
+  {
+    questionText: 'ดาวเคราะห์ดวงใดมีลมแรงที่สุดในระบบสุริยะ',
+    correct: 'ดาวเนปจูน',
+    wrongs: ['ดาวพฤหัสบดี', 'ดาวเสาร์', 'ดาวยูเรนัส', 'โลก']
+  },
+  {
+    questionText: 'ดาวเคราะห์ดวงใดมีวงแหวนเด่นชัดที่สุด',
+    correct: 'ดาวเสาร์',
+    wrongs: ['ดาวพุธ', 'โลก', 'ดาวอังคาร', 'ดาวศุกร์']
+  },
+  {
+    questionText: 'ดาวเคราะห์ดวงใดมีขนาดใหญ่ที่สุดในระบบสุริยะ',
+    correct: 'ดาวพฤหัสบดี',
+    wrongs: ['ดาวเสาร์', 'ดาวยูเรนัส', 'ดาวเนปจูน', 'โลก']
+  },
+  {
+    questionText: 'ดาวเคราะห์ดวงใดถูกเรียกว่า “ดาวเคราะห์สีแดง”',
+    correct: 'ดาวอังคาร',
+    wrongs: ['ดาวศุกร์', 'ดาวพุธ', 'ดาวเสาร์', 'ดาวเนปจูน']
+  },
+  {
+    questionText: 'ดวงอาทิตย์จัดเป็นวัตถุประเภทใด',
+    correct: 'ดาวฤกษ์',
+    wrongs: ['ดาวเคราะห์', 'ดาวเคราะห์แคระ', 'ดวงจันทร์', 'ดาวหาง']
+  },
+{
+  questionText: 'ดาวเคราะห์ดวงใดหมุนรอบตัวเองเร็วที่สุด?',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['โลก', 'ดาวเสาร์', 'ดาวอังคาร', 'ดาวพุธ']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีแกนเอียงมากจนเหมือนกลิ้งไปบนวงโคจร',
+  correct: 'ดาวยูเรนัส',
+  wrongs: ['ดาวเนปจูน', 'ดาวเสาร์', 'โลก', 'ดาวอังคาร']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดไม่มีดวงจันทร์บริวาร?',
+  correct: 'ดาวศุกร์',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวพฤหัสบดี', 'ดาวเสาร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดไม่มีดวงจันทร์และอยู่ใกล้ดวงอาทิตย์ที่สุด',
+  correct: 'ดาวพุธ',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวเนปจูน', 'ดาวเสาร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีดวงจันทร์ชื่อไททัน',
+  correct: 'ดาวเสาร์',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวยูเรนัส', 'ดาวเนปจูน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดเปิดปรากฏการณ์ “จุดแดงใหญ่”',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['ดาวศุกร์', 'ดาวเสาร์', 'ดาวเนปจูน', 'โลก']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีพื้นผิวปกคลุมด้วยน้ำมากที่สุด',
+  correct: 'โลก',
+  wrongs: ['ดาวพุธ', 'ดาวศุกร์', 'ดาวอังคาร', 'ดาวเนปจูน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีฉายาว่า "เตาไฟแช่แข็ง"',
+  correct: 'ดาวพุธ',
+  wrongs: ['ดาวศุกร์', 'โลก', 'ดาวอังคาร', 'ดาวเสาร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีอุณหภูมิแตกต่างระหว่างกลางวันและกลางคืนมากที่สุด',
+  correct: 'ดาวพุธ',
+  wrongs: ['ดาวศุกร์', 'โลก', 'ดาวอังคาร', 'ดาวพฤหัสบดี']
+},
+{
+  questionText: 'ก๊าซชนิดใดมีมากที่สุดในดวงอาทิตย์?',
+  correct: 'ไฮโดรเจน',
+  wrongs: ['ออกซิเจน', 'ไนโตรเจน', 'คาร์บอนไดออกไซด์', 'มีเทน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีฉายาว่า “ฝาแฝดของโลก”',
+  correct: 'ดาวศุกร์',
+  wrongs: ['ดาวอังคาร', 'ดาวพุธ', 'ดาวเสาร์', 'ดาวเนปจูน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดโคจรรอบดวงอาทิตย์นานที่สุด',
+  correct: 'ดาวเนปจูน',
+  wrongs: ['ดาวยูเรนัส', 'ดาวเสาร์', 'ดาวพฤหัสบดี', 'โลก']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดได้รับฉายาว่า “ราชาแห่งดาวเคราะห์”',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['ดาวเสาร์', 'ดาวยูเรนัส', 'ดาวเนปจูน', 'โลก']
+},
+{
+  questionText: 'แถบดาวเคราะห์น้อยอยู่ระหว่างดาวเคราะห์ใด',
+  correct: 'ดาวอังคาร-ดาวพฤหัสบดี',
+  wrongs: ['โลก-ดาวอังคาร', 'ดาวพุธ-ดาวศุกร์', 'ดาวพุธ-โลก', 'ดาวเสาร์-ดาวเนปจูน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีขนาดใหญ่ที่สุดในระบบสุริยะ',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['ดาวเสาร์', 'ดาวยูเรนัส', 'ดาวเนปจูน', 'โลก']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดหมุนรอบตัวเองเร็วที่สุด',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวเสาร์', 'ดาวพุธ']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีภูเขาไฟสูงที่สุดในระบบสุริยะ?',
+  correct: 'ดาวอังคาร',
+  wrongs: ['โลก', 'ดาวศุกร์', 'ดาวพุธ', 'ดาวเสาร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีดวงจันทร์ 1 ดวง?',
+  correct: 'โลก',
+  wrongs: ['ดาวอังคาร', 'ดาวพฤหัสบดี', 'ดาวเสาร์', 'ดาวยูเรนัส']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดมีดวงจันทร์ 2 ดวง?',
+  correct: 'ดาวอังคาร',
+  wrongs: ['โลก', 'ดาวพฤหัสบดี', 'ดาวศุกร์', 'ดาวเนปจูน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดไม่มีดวงจันทร์',
+  correct: 'ดาวพุธ',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวพฤหัสบดี', 'ดาวเสาร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดไม่มีดวงจันทร์',
+  correct: 'ดาวศุกร์',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวพฤหัสบดี', 'ดาวเสาร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดเป็นดาวเคราะห์แก๊ส',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวพุธ', 'ดาวศุกร์']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดเป็นดาวเคราะห์น้ำแข็งยักษ์',
+  correct: 'ดาวยูเรนัส',
+  wrongs: ['ดาวพฤหัสบดี', 'ดาวเสาร์', 'โลก', 'ดาวอังคาร']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดเป็นดาวเคราะห์ชั้นใน',
+  correct: 'โลก',
+  wrongs: ['ดาวพฤหัสบดี', 'ดาวเสาร์', 'ดาวยูเรนัส', 'ดาวเนปจูน']
+},
+{
+  questionText: 'ดาวเคราะห์ดวงใดเป็นดาวเคราะห์ชั้นนอก',
+  correct: 'ดาวเสาร์',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวศุกร์', 'ดาวพุธ']
+},
+{
+  questionText: 'โลกเป็นดาวเคราะห์ลำดับที่เท่าไรจากดวงอาทิตย์',
+  correct: 'ลำดับที่ 3',
+  wrongs: ['ลำดับที่ 1', 'ลำดับที่ 2', 'ลำดับที่ 4', 'ลำดับที่ 5']
+},
+{
+  questionText: 'โลกเป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์หิน',
+  wrongs: ['ดาวเคราะห์แก๊ส', 'ดาวเคราะห์น้ำแข็งยักษ์', 'ดาวเคราะห์แคระ', 'ดาวฤกษ์']
+},
+{
+  questionText: 'ดาวพุธเป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์หิน',
+  wrongs: ['ดาวเคราะห์แก๊ส', 'ดาวเคราะห์น้ำแข็งยักษ์', 'ดาวเคราะห์แคระ', 'ดาวฤกษ์']
+},
+{
+  questionText: 'ดาวศุกร์เป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์หิน',
+  wrongs: ['ดาวเคราะห์แก๊ส', 'ดาวเคราะห์น้ำแข็งยักษ์', 'ดาวเคราะห์แคระ', 'ดาวฤกษ์']
+},
+{
+  questionText: 'ดาวอังคารเป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์หิน',
+  wrongs: ['ดาวเคราะห์แก๊ส', 'ดาวเคราะห์น้ำแข็งยักษ์', 'ดาวเคราะห์แคระ', 'ดาวฤกษ์']
+},
+{
+  questionText: 'ดาวอังคารเป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์ชั้นใน',
+  wrongs: ['ดาวเคราะห์ชั้นนอก', 'ดาวเคราะห์ชั้นกลาง', 'ดาวเคราะห์ชั้นนอก', 'ดาวเคราะห์ชั้นกลาง']
+},
+{
+  questionText: 'ดาวเสาร์เป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์ชั้นนอก',
+  wrongs: ['ดาวเคราะห์ชั้นใน', 'ดาวเคราะห์ชั้นกลาง', 'ดาวเคราะห์ชั้นใน', 'ดาวเคราะห์ชั้นกลาง']
+},
+{
+  questionText: 'ดาวเนปจูนเป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์ชั้นนอก',
+  wrongs: ['ดาวเคราะห์ชั้นใน', 'ดาวเคราะห์ชั้นกลาง', 'ดาวเคราะห์ชั้นใน', 'ดาวเคราะห์ชั้นกลาง']
+},
+{
+  questionText: 'ดาวพฤหัสบดีเป็นดาวเคราะห์ประเภทใด',
+  correct: 'ดาวเคราะห์ชั้นนอก',
+  wrongs: ['ดาวเคราะห์ชั้นใน', 'ดาวเคราะห์ชั้นกลาง', 'ดาวเคราะห์ชั้นใน', 'ดาวเคราะห์ชั้นกลาง']
+},
+{
+  questionText: 'ข้อใดเป็นดาวเคราะห์ชั้นนอก',
+  correct: 'ดาวพฤหัสบดี',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวศุกร์', 'ดาวพุธ']
+},
+{
+  questionText: 'ข้อใดเป็นดาวเคราะห์ชั้นนอก?',
+  correct: 'ดาวเสาร์',
+  wrongs: ['โลก', 'ดาวศุกร์', 'ดาวอังคาร', 'ดาวพุธ']
+},
+{
+  questionText: 'ข้อใดเป็นดาวเคราะห์ชั้นนอก?',
+  correct: 'ดาวเนปจูน',
+  wrongs: ['โลก', 'ดาวอังคาร', 'ดาวศุกร์', 'ดาวพุธ']
+},
+];
+
+function drawLevel3SolarQuiz(){
+  if (usedLevel3Questions.length >= LEVEL3_SOLAR_QUIZ.length) {
+    usedLevel3Questions = [];
+  }
+
+  const remainingQuestions = LEVEL3_SOLAR_QUIZ.filter(q => !usedLevel3Questions.includes(q));
+  const q = pick(remainingQuestions);
+  usedLevel3Questions.push(q);
+
+  const wrong = pick(q.wrongs);
+  const answers = shuffle([
+    { name: q.correct, caption: q.correct, isCorrect: true },
+    { name: wrong, caption: wrong, isCorrect: false }
+  ]);
+
+  return {
+    questionText: q.questionText,
+    answers,
+    correctIndex: answers.findIndex(a => a.isCorrect)
+  };
+}
+
+function drawLevel3(){
+  const q = pick(LEVEL3_BANK);
+
+  const allAnswers = q.answers.map((a, idx) => ({
+    ...a,
+    _originalIndex: idx
+  }));
+
+  // 1) สุ่มคำตอบถูกมา 1 ตัวจาก correctIndices
+  const correctPool = allAnswers.filter(a => q.correctIndices.includes(a._originalIndex));
+  const pickedCorrect = pick(correctPool);
+
+  // 2) สุ่มคำตอบผิดมา 2 ตัวจากที่เหลือ
+  const wrongPool = allAnswers.filter(a => !q.correctIndices.includes(a._originalIndex));
+  const pickedWrong = shuffle(wrongPool).slice(0, 2);
+
+  // 3) รวมให้เหลือแค่ 3 ตัวเลือก แล้วสุ่มตำแหน่ง
+  const answers = shuffle([pickedCorrect, ...pickedWrong]);
+
+  // 4) หา index ใหม่ของคำตอบถูก หลัง shuffle
+  const correctIndices = answers
+    .map((a, pos) => q.correctIndices.includes(a._originalIndex) ? pos : -1)
+    .filter(pos => pos !== -1);
+
+  return {
+    questionText: q.questionText,
+    answers: answers.map(({ _originalIndex, ...rest }) => rest),
+    correctIndices
+  };
+}
+
+function drawLevel4(){
+  // ถ้าใช้ครบทุกข้อแล้ว ค่อยรีใหม่
+  if (usedLevel4Questions.length >= LEVEL4_BANK.length) {
+    usedLevel4Questions = [];
+  }
+
+  // เลือกเฉพาะข้อที่ยังไม่เคยใช้
+  const remainingQuestions = LEVEL4_BANK.filter(q => !usedLevel4Questions.includes(q));
+  const q = pick(remainingQuestions);
+
+  // จำว่าข้อนี้ถูกใช้แล้ว
+  usedLevel4Questions.push(q);
+
+  const allAnswers = q.answers.map((a, idx) => ({
+    ...a,
+    _originalIndex: idx
+  }));
+
+  // สุ่มคำตอบถูกมา 1 ตัว
+  const correctPool = allAnswers.filter(a => q.correctIndices.includes(a._originalIndex));
+  const pickedCorrect = pick(correctPool);
+
+  // สุ่มคำตอบผิดมา 2 ตัว
+  const wrongPool = allAnswers.filter(a => !q.correctIndices.includes(a._originalIndex));
+  const pickedWrong = shuffle(wrongPool).slice(0, 2);
+
+  // รวมให้เหลือ 3 ตัวเลือก
+  const answers = shuffle([pickedCorrect, ...pickedWrong]);
+
+  const correctIndices = answers
+    .map((a, pos) => q.correctIndices.includes(a._originalIndex) ? pos : -1)
+    .filter(pos => pos !== -1);
+
+  return {
+    questionText: q.questionText,
+    answers: answers.map(({ _originalIndex, ...rest }) => rest),
+    correctIndices
+  };
+}
+
+// ด่าน 1: วัสดุ -> เลือกวัตถุ (คำตอบถูกมาจาก LEVEL1_BINDINGS, ตัวหลอกจาก OBJECTS)
+function drawLevel1(){
+  const keys = Object.keys(LEVEL1_BINDINGS);
+  const material = pick(keys);
+
+  const correct = pick(LEVEL1_BINDINGS[material]);
+
+  // ตัวหลอกจากวัสดุอื่น
+  const fakes = shuffle(
+      keys.filter(k => k !== material)
+  ).slice(0,2).map(k => pick(LEVEL1_BINDINGS[k]));
+
+  const candidates = shuffle([
+      { ...correct, _ok:true },
+      ...fakes
+  ]);
+  const correctIndex = candidates.findIndex(c => c._ok);
+
+  return {
+    questionText: material,
+    answers: candidates.map(c => ({
+      type: 'object',
+      name: c.caption,
+      img:  c.img,
+      tag:  material,
+      caption: c.caption
+    })),
+    correctIndex
+  };
+}
+
+function drawLevel2(){
+  // ถ้าใช้ครบทุกข้อแล้ว ค่อยรีใหม่
+  if (usedLevel2Questions.length >= OBJECTS.length) {
+    usedLevel2Questions = [];
+  }
+
+  // เลือกเฉพาะข้อที่ยังไม่เคยใช้
+  const remainingObjects = OBJECTS.filter(o => !usedLevel2Questions.includes(o));
+  const obj = pick(remainingObjects);
+
+  // จำว่าข้อนี้ถูกใช้แล้ว
+  usedLevel2Questions.push(obj);
+
+  const question = obj.name;
+  const correctMats = obj.materials || [obj.material];
+
+  // สุ่มคำตอบถูกมา 1 ตัวจากตัวที่ยอมรับได้
+  const pickedCorrectMat = pick(correctMats);
+
+  const correct = {
+    img: MATERIAL_IMG[pickedCorrectMat],
+    caption: pickedCorrectMat
+  };
+
+  const mats = Object.keys(MATERIAL_IMG).filter(m => !correctMats.includes(m));
+  const distract = shuffle(mats)
+    .slice(0, 2)
+    .map(m => ({
+      img: MATERIAL_IMG[m],
+      caption: m
+    }));
+
+  const candidates = shuffle([
+    { img: correct.img, caption: correct.caption, _ok: true },
+    ...distract
+  ]);
+
+  const correctIndex = candidates.findIndex(c => c._ok);
+
+  return {
+    questionText: question,
+    answers: candidates.map(c => ({
+      type: 'material',
+      name: c.caption,
+      img: c.img,
+      tag: c.caption,
+      caption: c.caption
+    })),
+    correctIndex
+  };
+}
+
+// =========================
+// พรีโหลดรูปภาพ (รองรับ fail แล้วไปต่อ)
+// =========================
+const __imgMemo = new Map();
+function preloadOne(src, timeout=8000, tries=2){
+  if(!src) return Promise.resolve(false);
+  if(__imgMemo.has(src)) return __imgMemo.get(src);
+  const runner = (attempt)=> new Promise(resolve=>{
+    const img = new Image(); let done=false;
+    const settle = ok=>{ if(done) return; done=true;
+      // ถ้าโหลดสำเร็จ decode เพื่อให้ GPU พร้อม (non-blocking)
+      if(ok && img.decode){ img.decode().catch(()=>{}).finally(()=>resolve(true)); }
+      else { resolve(ok); }
+    };
+    const t = setTimeout(()=>{ img.onload=img.onerror=null; settle(false) }, timeout);
+    img.onload = ()=>{ clearTimeout(t); settle(true) };
+    img.onerror= ()=>{ clearTimeout(t); (attempt<tries)? setTimeout(()=>runner(attempt+1).then(resolve), 250): settle(false) };
+    img.decoding='async'; img.loading='eager'; img.referrerPolicy='no-referrer'; img.src=src;
+  });
+  const p=runner(0); __imgMemo.set(src,p); return p;
+}
+async function preloadInBatches(urls,batch=16,onProgress=()=>{}){
+  const list=[...new Set(urls.filter(Boolean))]; let done=0;
+  for(let i=0;i<list.length;i+=batch){
+    const chunk=list.slice(i,i+batch);
+    await Promise.allSettled(chunk.map(u=>preloadOne(u)));
+    done+=chunk.length; onProgress(Math.round((done/list.length)*100));
+    await new Promise(r=>setTimeout(r,60));
+  }
+}
+
+function collectAllGameImages(){
+  const urls = new Set();
+  LEVEL1_PLANETS.forEach(src => urls.add(src));
+  [
+    "image/background2.png",
+    "image/background3.png",
+    "image/welcomepage.png",
+    "image/banner2.png",
+    "image/guide.png",
+    "image/button1.png",
+    "image/button2.png",
+    "image/state1.png",
+    "image/state2.png",
+    "image/state3.png",
+    "objects2/object0.png",
+  ].forEach(src => urls.add(src));
+
+  // ดึงจาก MATERIAL_IMG ทั้งก้อน
+  if (typeof MATERIAL_IMG !== "undefined") {
+    Object.values(MATERIAL_IMG).forEach(src => {
+      if (src) urls.add(src);
+    });
+  }
+
+  // ด่าน 1 – รูปดาวเคราะห์และ planetinfo ใน objects2
+  for (let i = 1; i <= 10; i++) {
+    urls.add(`objects2/planetinfo${i}.png`);
+    // รูปข้อมูลดาว 3 หมวด × 2 รูป ใน folder info{n}/
+    ['basic','physical','orbit'].forEach(key => {
+      urls.add(`info${i}/p${i}-${key}-1.png`);
+      urls.add(`info${i}/p${i}-${key}-2.png`);
+    });
+  }
+
+  if (typeof LEVEL1_BINDINGS !== "undefined") {
+    Object.values(LEVEL1_BINDINGS).forEach(arr => {
+      (arr || []).forEach(o => {
+        if (o && o.img) urls.add(o.img);
+      });
+    });
+  }
+
+  // ด่าน 2
+  if (typeof LEVEL2_BINDINGS !== "undefined") {
+    Object.values(LEVEL2_BINDINGS).forEach(o => {
+      if (o && o.img) urls.add(o.img);
+    });
+  }
+
+  // ด่าน 3
+  if (typeof LEVEL3_BANK !== "undefined") {
+    LEVEL3_BANK.forEach(q => {
+      (q.answers || []).forEach(o => {
+        if (o && o.img) urls.add(o.img);
+      });
+    });
+  }
+
+  // ด่าน 4
+  if (typeof LEVEL4_BANK !== "undefined") {
+    LEVEL4_BANK.forEach(q => {
+      (q.answers || []).forEach(o => {
+        if (o && o.img) urls.add(o.img);
+      });
+    });
+  }
+
+  return [...urls].filter(Boolean).map(p => new URL(p, location.href).href);
+}
+
+function bindPreloadProgress(){
+  const bar  = document.getElementById('preloadBar');
+  const text = document.getElementById('preloadText');
+  return (pct)=>{ if(bar) bar.style.width=pct+'%'; if(text) text.textContent='กำลังเตรียมข้อมูล… '+pct+'%'; };
+}
+async function runGlobalPreload(){
+  const urls=collectAllGameImages(); const progress=bindPreloadProgress();
+  try{ await preloadInBatches(urls,18,(p)=>progress(p)) }finally{
+    document.getElementById('preloadOverlay')?.remove();
+    window.__ALL_IMAGES_READY__=true;
+  }
+}
+window.addEventListener('load', runGlobalPreload);
+
+// =========================
+// สร้างรอบคำถาม/แสดงตัวเลือก
+// =========================
+function clearChoices(){
+  while(choicesRow.firstChild) choicesRow.removeChild(choicesRow.firstChild);
+}
+
+// ==== STOP marquee safely (ฆ่าแอนิเมชัน + กัน callback เก่า) ====
+let __mqToken = 0;
+function stopMarquee(){
+  __mqToken++; // ทำให้ callback เก่ากลายเป็นโมฆะ
+  const span = qBox.querySelector('.mq');
+  if (!span) return;
+  span.style.animation = 'none';
+  span.style.transition = 'none';
+  span.style.opacity = '0';
+  span.remove();
+}
+
+// ==== เล่นเอฟเฟกต์ย่อเล็กลงแล้วเคลียร์ทุกช้อยส์ ====
+function vanishAllChoices(ms = 420){
+  choicesRow.style.setProperty('--vanish-ms', (ms|0)+'ms');
+  const wraps = [...choicesRow.querySelectorAll('.option-wrap')];
+  if (!wraps.length){ clearChoices(); return; }
+
+  // ล้างคลาสที่อาจชน transition/animation เดิม แล้วบังคับรีโฟลว์ก่อนใส่ .is-vanish
+  wraps.forEach(w=>{
+    w.classList.remove('chosen','faded','is-chosen','is-faded');
+    const c = w.querySelector('.option.circle');
+    if (c){
+      c.classList.remove('pre-in','go-in','pick-pop','slide-up-out');
+      // รีโฟลว์เพื่อให้อนิเมชันใหม่เริ่มแน่ๆ
+      void c.offsetWidth;
+    }
+  });
+
+  // ใส่อนิเมชัน “ย่อแล้วหาย” ให้ทั้งกล่อง
+  requestAnimationFrame(()=>{
+    wraps.forEach(w=> w.classList.add('is-vanish'));
+  });
+
+  // เคลียร์จริงหลังอนิเมชันจบ
+  setTimeout(()=>{ clearChoices(); }, ms);
+}
+
+
+function randomRing(el){
+  const colors = [
+    ['#ef4444','#f59e0b'], ['#3b82f6','#06b6d4'], ['#22c55e','#84cc16'],
+    ['#a855f7','#ec4899'], ['#f97316','#eab308']
+  ];
+  const [a,b]=pick(colors);
+  el.style.setProperty('--ring', `linear-gradient(130deg, ${a}, ${b})`);
+}
+
+function spawnRow3(answers, correctIndex, questionText){
+  clearChoices();
+
+  answers.forEach((ans,idx)=>{
+    // กล่องครอบ: เพื่อวาง "วงกลม" + "แคปชันใต้รูป"
+    const wrap = document.createElement('div');
+    wrap.className = 'option-wrap';
+
+    // ปุ่มวงกลม (ของเดิม)
+    const el = document.createElement('div');
+    el.className = 'option circle pre-in';
+    randomRing(el);
+
+    const im = document.createElement('img');
+    im.alt = (ans.type==='object' ? 'วัตถุ' : 'วัสดุ') + ' : ' + (ans.name||'');
+    im.src = ans.img || '';
+    el.appendChild(im);
+
+    // dataset สำหรับตรวจถูก/ผิด
+    el.dataset.correct = String(idx===correctIndex);
+    el.dataset.index = String(idx);
+    el.addEventListener('click', ()=>tryAnswer(el));
+
+    // แคปชันใต้รูป (ไม่ผูกกับคำถาม)
+    const cap = document.createElement('div');
+    cap.className = 'opt-cap';
+    cap.textContent = String(ans.caption || ans.name || '');
+
+    // ประกอบเข้าด้วยกัน
+    wrap.appendChild(el);
+    wrap.appendChild(cap);
+    choicesRow.appendChild(wrap);
+
+    // เข้าเฟรมทีละปุ่ม
+    setTimeout(()=>{ el.classList.add('go-in'); }, 80*idx);
+  });
+
+  // คำถามล่างจอให้ใช้ตัวที่ส่งมาโดยตรง
+  setQuestionMarquee(String(questionText || ''));
+}
+
+// ===== ด่าน 3: สร้าง 3 ปุ่ม + รองรับหลายคำตอบถูก =====
+function spawnRow3Multi(answers, correctIndices, questionText){
+  clearChoices();
+
+  __multiCorrectSet = new Set(correctIndices);
+  remainingCorrect = new Set(correctIndices);
+
+  answers.forEach((ans, idx)=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'option-wrap';
+
+    const el = document.createElement('div');
+    el.className = 'option circle pre-in';
+    randomRing(el);
+
+    const im = document.createElement('img');
+    im.alt = (ans.type==='object' ? 'วัตถุ' : 'วัสดุ') + ' : ' + (ans.name||'');
+    im.src = ans.img || '';
+    el.appendChild(im);
+
+    el.dataset.index = String(idx);
+    el.addEventListener('click', ()=>tryAnswerMulti(el));
+
+    const cap = document.createElement('div');
+    cap.className = 'opt-cap';
+    cap.textContent = String(ans.caption || ans.name || '');
+
+    wrap.appendChild(el);
+    wrap.appendChild(cap);
+    choicesRow.appendChild(wrap);
+
+    setTimeout(()=>{ el.classList.add('go-in'); }, 80*idx);
+  });
+
+  setQuestionMarquee(String(questionText || ''));
+}
+
+// ===== ตรวจคำตอบแบบหลายตัวถูก =====
+function tryAnswerMulti(el){
+  if (ended || !awaitingAnswer) return;
+
+  const idx  = Number(el.dataset.index);
+  const ok   = __multiCorrectSet.has(idx);
+  const wrap = el.closest('.option-wrap');
+
+  // กันกดซ้ำ + ปิดรับคำตอบทันที
+  if (el.classList.contains('answered')) return;
+  el.classList.add('answered');
+  awaitingAnswer = false;
+
+  // เอฟเฟกต์เลือก + เร่งคำถามออกซ้าย + เฟดตัวอื่น
+  boostQuestionOutFast(280);
+  [...choicesRow.querySelectorAll('.option-wrap')].forEach(w=>{
+    if (w === wrap) w.classList.add('is-chosen');
+    else            w.classList.add('is-faded');
+  });
+
+  // คะแนน + เสียง + แฟลช
+  if (ok){
+    score += 1;
+    playSfx(selectSound, VOL_SELECT);
+    playSfx(hitSound,    VOL_HIT);
+    flyScore(true);
+  }else{
+    score -= 1;
+    playSfx(wrongSound, VOL_WRONG);
+    flyScore(false);
+  }
+  renderGold(score);
+
+  // เคลียร์จอแล้วรอไปข้อถัดไป (ผ่านปุ่ม NEXT โปร่งใส)
+  setTimeout(()=>{
+    clearChoices();
+    qBox.textContent = '';
+    awaitingContinue = true;
+    qDecor?.classList.add('arm-next');
+    syncFastNextUI();
+  }, 520);
+
+  // ถ้าต้องการ "ไปข้อถัดไปเองเลย" ให้แทนบล็อกด้านบนด้วย:
+  // setTimeout(()=> { clearChoices(); qBox.textContent=''; nextRound(); }, 520);
+}
+
+function spawnLevel3Choice2(answers, correctIndex, questionText){
+  clearChoices();
+
+  qBox.style.display = '';
+  qBox.innerHTML = `<span class="mq run">${questionText}</span>`;
+
+// 🔥 หา element .mq แล้วย่อฟอนต์
+const mq = qBox.querySelector('.mq');
+
+requestAnimationFrame(()=>{
+  fitTextOneLine(mq, 72, 24);
+});
+
+  choicesRow.innerHTML = '';
+  choicesRow.style.display = '';
+  choicesRow.style.pointerEvents = '';
+
+  answers.forEach((ans, i)=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'option-wrap';
+
+    const btn = document.createElement('button');
+    btn.className = 'option circle pre-in';
+    btn.type = 'button';
+    btn.dataset.correct = String(i === correctIndex);
+    btn.dataset.answer = ans.name || ans.caption || '';
+    btn.textContent = ans.caption || ans.name || '';
+        randomRing(btn);
+    btn.addEventListener('click', ()=>tryAnswer(btn));
+
+    wrap.appendChild(btn);
+    choicesRow.appendChild(wrap);
+
+    requestAnimationFrame(()=>{
+      setTimeout(()=>{
+        btn.classList.remove('pre-in');
+        btn.classList.add('go-in');
+      }, i * 110);
+    });
+  });
+}
+
+function tryAnswer(el){
+  if (ended || !awaitingAnswer) return;
+
+  awaitingAnswer = false;
+  choicesRow.style.pointerEvents = 'none';
+
+  const ok = (el.dataset.correct === 'true');
+
+  if (ok) {
+    playSfx(selectSound, VOL_SELECT);
+    playSfx(hitSound, VOL_HIT);
+  } else {
+    playSfx(wrongSound, VOL_WRONG);
+  }
+
+  score += ok ? 1 : -1;
+  renderGold(score);
+  flyScore(ok);
+
+  // เฉพาะด่าน 3: เฟดเอาท์ทุกอย่างในจอ รวมกล่องคำถามด้วย
+if (window.currentLevel === 3) {
+  [...choicesRow.querySelectorAll('.option-wrap, .option.circle')].forEach(n=>{
+    n.classList.remove(
+      'pre-in','go-in',
+      'pick-pop','slide-up-out',
+      'chosen','faded',
+      'is-chosen','is-faded','is-vanish'
+    );
+    n.style.animation = 'none';
+    n.style.transition = 'none';
+  });
+
+  qBox.classList.add('level3-fade-out');
+  choicesRow.classList.add('level3-fade-out');
+
+    setTimeout(()=>{
+      choicesRow.style.pointerEvents = '';
+      clearChoices();
+      qBox.textContent = '';
+
+      qBox.classList.remove('level3-fade-out');
+      choicesRow.classList.remove('level3-fade-out');
+
+      if (!ended && window.currentLevel === 3) {
+        nextRound();
+      }
+    }, 3000);
+
+    return;
+  }
+
+  // ด่านอื่น: ใช้ระบบเดิม
+  boostQuestionOutFast(280);
+
+  const chosenWrap = el.closest('.option-wrap');
+
+  [...choicesRow.querySelectorAll('.option-wrap')].forEach(w=>{
+    const circle = w.querySelector('.option.circle');
+    circle?.classList.remove('go-in', 'pre-in', 'pick-pop', 'slide-up-out');
+
+    if (w === chosenWrap) {
+      w.classList.add('is-chosen');
+    } else {
+      w.classList.add('is-faded');
+    }
+  });
+
+  setTimeout(()=>{
+    choicesRow.style.pointerEvents = '';
+    clearChoices();
+    qBox.textContent = '';
+
+    awaitingContinue = true;
+    qDecor?.classList.add('arm-next');
+    syncFastNextUI();
+  }, 520);
+}
+
+// ดึงโจทย์ตามด่าน
+function drawQuestion(){
+  if (window.currentLevel === 1) return null; // ด่าน 1 ใช้ viewer ไม่ใช้ระบบคำถาม
+  if (window.currentLevel === 2) return drawLevel2();
+  if (window.currentLevel === 3) return drawLevel3SolarQuiz();
+  if (window.currentLevel === 4) return drawLevel4();
+  return drawLevel1();
+}
+
+function nextRound(){
+  if(ended) return;
+
+  clearChoices();
+  awaitingAnswer = false;
+  qBox.classList.remove('go-x','pre-x');
+  stopMarquee();
+
+  // ===== ด่าน 1 : โหมดดูภาพ =====
+  if (window.currentLevel === 1){
+    showLevel1Viewer();
+    return;
+  }
+
+  // ด่านอื่นกลับไปใช้ระบบเดิม
+  hideLevel1Viewer();
+  qBox.style.display = '';
+  qDecor.style.display = '';
+  choicesRow.style.display = '';
+
+  const q = drawQuestion();
+
+if (window.currentLevel === 3){
+  spawnLevel3Choice2(q.answers, q.correctIndex, q.questionText);
+} else if (window.currentLevel === 4){
+  spawnRow3Multi(q.answers, q.correctIndices, q.questionText);
+} else {
+  spawnRow3(q.answers, q.correctIndex, q.questionText);
+}
+
+  awaitingAnswer = true;
+}
+
+// =========================
+// วงจรเกม: เริ่ม/หยุด/สรุป
+// =========================
+function scheduleGameTimer(ms){
+  clearTimeout(gameTimerId);
+  gameTimerId=setTimeout(()=>{ if(!ended) endLevel() }, Math.max(0,ms|0));
+}
+function startGameTimer(){
+  remainingMs = GAME_DURATION_MS;
+  gameEndAt = performance.now() + remainingMs;
+  scheduleGameTimer(remainingMs);
+  startClockUI();
+}
+function pauseGameTimer(){
+  if(gameTimerId){
+    remainingMs=Math.max(0,gameEndAt - performance.now());
+    clearTimeout(gameTimerId); gameTimerId=null;
+    pauseClockUI();
+  }
+}
+function resumeGameTimer(){
+  if(remainingMs>0 && !ended){
+    gameEndAt = performance.now() + remainingMs;
+    scheduleGameTimer(remainingMs);
+    startClockUI();
+  }
+}
+
+function stopGameTimerHard(){
+  clearTimeout(gameTimerId);
+  gameTimerId = null;
+  gameEndAt = 0;
+  remainingMs = GAME_DURATION_MS;
+  stopClockUI();
+  if (clockEl) clockEl.textContent = '02:00';
+}
+
+function startGame(){
+  document.body.classList.add('in-game');
+  running = true;
+  ended = false;
+  paused = false;
+
+  overlay.style.visibility = 'hidden';
+  overlay.style.opacity = '0';
+
+  score = 0;
+  round = 0;
+  renderGold(score);
+
+  awaitingContinue = false;
+  qDecor?.classList.remove('arm-next');
+  syncFastNextUI();
+
+  bgm?.play?.().catch(()=>{});
+
+  hideLevel1Viewer();
+  syncHudByLevel();
+
+  if (window.currentLevel === 1){
+    // ด่าน 1 = ไม่มีระบบเวลาเลย
+    stopGameTimerHard();
+
+    qBox.textContent = '';
+    qBox.style.display = 'none';
+    qDecor.style.display = 'none';
+    choicesRow.style.display = 'none';
+    fastNext.classList.remove('show','arm-next');
+    fastNext.style.display = 'none';
+  } else {
+    // ด่านอื่นใช้เวลาเหมือนเดิม
+    startGameTimer();
+
+    qBox.style.display = '';
+    qDecor.style.display = '';
+    choicesRow.style.display = '';
+    fastNext.style.display = '';
+  }
+
+  // รอให้ภาพพร้อมก่อนเริ่มรอบแรก (ถ้ายังไม่พร้อม)
+  if (window.__ALL_IMAGES_READY__) {
+    nextRound();
+  } else {
+    (async () => {
+      while (!window.__ALL_IMAGES_READY__) {
+        await new Promise(r => setTimeout(r, 80));
+      }
+      if (!ended) nextRound();
+    })();
+  }
+}
+
+
+
+function endLevel(){
+  ended=true; running=false; pauseGameTimer(); stopClockUI();
+  finalScoreEl.textContent=String(score);
+  document.getElementById('scoreBadge').textContent = score<=5?'❤️':score<=10?'🥇':'🏆';
+  bgm?.pause?.(); playSfx(winSound);
+qBox.textContent = '';     // ← ล้างข้อความคำถาม
+clearChoices();            // ← ล้างวงกลมคำตอบ
+
+  overlay.style.visibility='visible'; overlay.style.opacity='1';
+}
+
+function resetState(){
+  clearChoices();
+  awaitingAnswer=false;
+  awaitingContinue=false;
+  qDecor?.classList.remove('arm-next');
+  syncFastNextUI();
+
+  qBox.textContent='';
+  qBox.classList.remove('go-x','pre-x');
+
+  score=0;
+  renderGold(score);
+  remainingMs=GAME_DURATION_MS;
+  stopClockUI();
+
+  usedLevel2Questions = [];
+  usedLevel3Questions = [];
+  usedLevel4Questions = [];
+
+  if (clockEl) clockEl.textContent='02:00';
+
+  // คืน HUD กลับไว้ก่อน เผื่อเปลี่ยนไปเล่นด่านอื่น
+  if (clockEl) clockEl.style.display = '';
+  if (goldWrap) goldWrap.style.display = '';
+  if (hudRight) hudRight.style.display = '';
+
+  ended=true;
+  running=false;
+  paused=false;
+}
+
+// ปุ่มควบคุม
+pauseBtn?.addEventListener('click', ()=>{
+  if(!running || ended) return;
+
+  if(!paused){
+    paused = true;
+    if (window.currentLevel !== 1) pauseGameTimer();
+    pauseBtn.textContent = '▶️ ต่อ';
+  } else {
+    paused = false;
+    if (window.currentLevel !== 1) resumeGameTimer();
+    pauseBtn.textContent = '⏸ หยุด';
+    bgm?.play?.().catch(()=>{});
+  }
+});
+
+document.getElementById('quickRestart')?.addEventListener('click', ()=>{
+
+// ถ้ากำลังอยู่หน้าเริ่ม/นับถอยหลัง ให้ปิดและหยุดนับทันที
+if (window.__countdownItv) {
+  clearInterval(window.__countdownItv);
+  window.__countdownItv = null;
+}
+const startScreen  = document.getElementById('startScreen');
+const countdownEl  = document.getElementById('countdown');
+const startBtn     = document.getElementById('startBtn');
+if (startScreen)  startScreen.style.display = 'none';
+if (countdownEl){ countdownEl.style.display='none'; countdownEl.textContent='3'; }
+if (startBtn){ startBtn.style.display='inline-block'; startBtn.disabled=false; startBtn.style.pointerEvents='auto'; }
+document.body.classList.remove('prestart');
+document.getElementById('questionBox')?.querySelector('.mq')?.style.setProperty('animation-play-state', paused ? 'paused' : 'running');
+  document.getElementById('landing').classList.remove('hide');
+
+  overlay.style.visibility='hidden'; overlay.style.opacity='0';
+  resetState(); document.body.classList.remove('in-game');
+});
+
+restartBtn.addEventListener('click', ()=>{ overlay.style.visibility='hidden'; overlay.style.opacity='0'; resetState(); startGame(); bgm.currentTime=0; bgm.play().catch(()=>{}); });
+selectLevelBtn.addEventListener('click', ()=>{
+// ถ้ากำลังอยู่หน้าเริ่ม/นับถอยหลัง ให้ปิดและหยุดนับทันที
+if (window.__countdownItv) {
+  clearInterval(window.__countdownItv);
+  window.__countdownItv = null;
+}
+const startScreen  = document.getElementById('startScreen');
+const countdownEl  = document.getElementById('countdown');
+const startBtn     = document.getElementById('startBtn');
+if (startScreen)  startScreen.style.display = 'none';
+if (countdownEl){ countdownEl.style.display='none'; countdownEl.textContent='3'; }
+if (startBtn){ startBtn.style.display='inline-block'; startBtn.disabled=false; startBtn.style.pointerEvents='auto'; }
+document.body.classList.remove('prestart');
+
+overlay.style.visibility='hidden';
+overlay.style.opacity='0';
+
+clearLevel1Everything(); // ✅ เคลียร์ด่าน 1 ให้หมดก่อนกลับเมนู
+
+resetState();
+document.body.classList.remove('in-game');
+document.body.classList.remove('level2-mode','level3-mode','level4-mode');
+
+document.getElementById('landing').classList.remove('hide');
+bgm.currentTime=0;
+bgm.play().catch(()=>{});
+});
+
+// =========================
+// Welcome → Landing → Start
+// =========================
+(function(){
+  const welcome = document.getElementById('welcome');
+  const enterBtn = document.getElementById('enterBtn');
+  const landing = document.getElementById('landing');
+  enterBtn.addEventListener('click', async ()=>{
+    while(!window.__ALL_IMAGES_READY__) await new Promise(r=>setTimeout(r,120));
+    welcome.classList.add('hide'); landing.classList.remove('hide'); bgm?.play?.().catch(()=>{});
+  });
+})();
+
+(function(){
+  const landing = document.getElementById('landing');
+  const startScreen = document.getElementById('startScreen');
+  const guideScreen = document.getElementById('guideScreen');
+  const startBtn = document.getElementById('startBtn');
+  const countdownEl = document.getElementById('countdown');
+
+  document.querySelectorAll('.levelBtn').forEach(btn=>{
+    if(btn.id==='guideBtn') return;
+    btn.addEventListener('click', ()=>{
+      window.currentLevel = Number(btn.dataset.level||1);
+
+      document.body.classList.remove('level2-mode');
+      if (window.currentLevel === 2) {
+        document.body.classList.add('level2-mode');
+      }
+
+document.body.classList.remove('level3-mode');
+if (window.currentLevel === 3) {
+  document.body.classList.add('level3-mode');
+}
+
+    document.body.classList.remove('level4-mode');
+    if(window.currentLevel === 4){
+      document.body.classList.add('level4-mode');
+    }
+
+      landing.classList.add('hide');
+      document.body.classList.add('prestart');
+      startScreen.style.display='flex';
+      // สรุปภารกิจตามด่าน
+      const st = document.getElementById('startTitle');
+
+
+st.textContent =
+  (window.currentLevel === 2)
+    ? 'ภารกิจ : เลือกรูปภาพอวัยวะให้ถูกต้อง'
+    : (window.currentLevel === 3)
+      ? 'ภารกิจ : ตอบคำถามระบบสุริยะ'
+      : (window.currentLevel === 4)
+        ? 'ภารกิจ : เลือกส่วนต่าง ๆ ของพืชให้สอดคล้องกับหน้าที่'
+        : 'ภารกิจ : สำรวจระบบสุริยะ';
+
+
+      // ปุ่มเริ่ม / นับถอยหลัง
+      startBtn.style.display='inline-block'; startBtn.disabled=false; startBtn.style.pointerEvents='auto';
+      countdownEl.style.display='none'; countdownEl.textContent='3';
+
+      // ===== Preload รูปเฉพาะด่านที่เลือก ขณะรอ countdown =====
+      (function preloadLevelImages(lv){
+        const urls = new Set();
+        if (lv === 1) {
+          // planet viewer + info images
+          for (let i = 1; i <= 10; i++) {
+            urls.add(`objects1/planet${i}.png`);
+            urls.add(`objects2/planetinfo${i}.png`);
+            ['basic','physical','orbit'].forEach(key => {
+              urls.add(`info${i}/p${i}-${key}-1.png`);
+              urls.add(`info${i}/p${i}-${key}-2.png`);
+            });
+          }
+        } else if (lv === 2) {
+          if (typeof MATERIAL_IMG !== "undefined") {
+            Object.values(MATERIAL_IMG).forEach(src => { if(src) urls.add(src); });
+          }
+          if (typeof OBJECTS !== "undefined") {
+            OBJECTS.forEach(o => { if(o && o.img) urls.add(o.img); });
+          }
+        } else if (lv === 3) {
+          // ด่าน 3 ใช้แค่ตัวเลือกข้อความ ไม่มีรูปตัวเลือก
+        } else if (lv === 4) {
+          if (typeof MATERIAL_IMG !== "undefined") {
+            Object.values(MATERIAL_IMG).forEach(src => { if(src) urls.add(src); });
+          }
+          if (typeof LEVEL4_BANK !== "undefined") {
+            LEVEL4_BANK.forEach(q => (q.answers||[]).forEach(a => { if(a && a.img) urls.add(a.img); }));
+          }
+        }
+        const list = [...urls].filter(Boolean);
+        // preloadOne มี cache ไว้แล้ว จะข้ามรูปที่โหลดไปแล้ว
+        list.forEach(src => preloadOne(src));
+        if (list.length) console.log(`🎯 level ${lv} targeted preload:`, list.length, 'images');
+      })(window.currentLevel);
+    });
+  });
+
+  document.getElementById('guideBtn')?.addEventListener('click', ()=>{ landing.classList.add('hide'); guideScreen.style.display='flex' });
+  document.getElementById('guideBack')?.addEventListener('click', ()=>{ guideScreen.style.display='none'; landing.classList.remove('hide') });
+
+// เริ่มเกม + นับถอยหลัง 3..2..1
+let countdownItv=null; // ← ของเดิมมีอยู่ ให้ลบหรือคอมเมนต์ทิ้งไป
+
+// === ใส่ของใหม่แทน ===
+window.__countdownItv = null;
+function clearCountdown(){
+  if(window.__countdownItv){
+    clearInterval(window.__countdownItv);
+    window.__countdownItv = null;
+  }
+  countdownEl.style.display='none'; countdownEl.textContent='3';
+  startBtn.style.display='inline-block'; startBtn.disabled=false; startBtn.style.pointerEvents='auto';
+}
+function runCountdown(){
+  startBtn.disabled=true; startBtn.style.pointerEvents='none'; startBtn.style.display='none';
+  let n=3; countdownEl.textContent=n; countdownEl.style.display='block';
+  window.__countdownItv = setInterval(()=>{
+    n--;
+    if(n>0){ countdownEl.textContent=n; }
+    else{ clearCountdown(); startScreen.style.display='none'; startGame(); }
+  },1000);
+}
+
+  startBtn.addEventListener('click', ()=>{ runCountdown(); });
+})();
+
+// =========================
+// Visibility Pause
+// =========================
+let wasRunning=false;
+function uiBlockingOpen(){
+  const landing=document.getElementById('landing');
+  const startOpen = (document.getElementById('startScreen').style.display!=='none');
+  const guide=document.getElementById('guideScreen');
+  const guideOpen = getComputedStyle(guide).display!=='none';
+  const overlayOpen = overlay.style.visibility==='visible';
+  return overlayOpen || (!landing.classList.contains('hide')) || startOpen || guideOpen;
+}
+function handleHidden(){ wasRunning = running && !ended && !uiBlockingOpen(); if(wasRunning) { paused=true; pauseGameTimer(); } }
+function handleVisible(){ if(wasRunning && paused && !ended && !uiBlockingOpen()){ paused=false; resumeGameTimer(); } wasRunning=false }
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) handleHidden(); else handleVisible() });
+window.addEventListener('blur', handleHidden); window.addEventListener('focus', handleVisible);
+
+})();
+</script>
+
+<!-- ===== คำสั่งเสียง (คงไว้) ===== -->
+<script>
+(function(){
+  const micBtn = document.getElementById('micBtn'); if(!micBtn) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ micBtn.textContent='🎤 ไม่รองรับ'; micBtn.disabled=true; return }
+  const rec = new SR(); rec.lang='th-TH'; rec.continuous=true; rec.interimResults=true;
+  function tokensFrom(s){ s=(s||'').toLowerCase().trim(); s=s.replace(/\s*(ค่ะ|ครับ|คะ|ฮะ)$/,''); return s.split(/[\s,，。\.!?:;、]+/).filter(Boolean) }
+  function currentOptionsMap(){ const map=new Map(); document.querySelectorAll('.option').forEach(n=>{ const t=(n.getAttribute('alt')||n?.querySelector('img')?.alt||'').trim().toLowerCase(); if(!map.has(t)) map.set(t,[]); map.get(t).push(n) }); return map }
+  function pickNearest(arr){ return arr[0] }
+  function tryFire(phrase){ const toks=tokensFrom(phrase); if(!toks.length) return false; const cmap=currentOptionsMap(); for(const t of toks){ if(cmap.has(t)){ const node = pickNearest(cmap.get(t)); node?.click(); return true } } return false }
+  rec.onresult=(e)=>{ for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; const txt=(r[0]?.transcript||'').trim(); if(!txt) continue; tryFire(txt) } };
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
+<!-- ===== กล้อง (มือเป็นวงกลมแตะเลือกช้อยส์) ===== -->
+<script type="module">
+import {PoseLandmarker, FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
+const camBtn = document.getElementById('camBtn');
+const video  = document.getElementById('cameraMirror');
+
+const personCvs = document.getElementById('personCanvas');
+const personCtx = personCvs.getContext('2d', { alpha: true });
+
+const cvs    = document.getElementById('camCanvas');
+const ctx    = cvs.getContext('2d', { alpha: true });
+const DETECT_W = 320;
+let detectCanvas = document.createElement('canvas');
+let detectCtx = detectCanvas.getContext('2d', { alpha:false, desynchronized:true });
+let CAM_ON=false, landmarker=null, raf=0, stream=null;
+let selfieSegmentation=null;
+let segmentBusy=false;
+let lastSegAt=0;
+const SEGMENT_FPS=24;
+
+function fitPersonCanvas(){
+  const dpr = 1;
+  personCvs.width = Math.round(innerWidth * dpr);
+  personCvs.height = Math.round(innerHeight * dpr);
+  personCvs.style.width = innerWidth + 'px';
+  personCvs.style.height = innerHeight + 'px';
+  personCtx.setTransform(1,0,0,1,0,0);
+  personCtx.scale(dpr,dpr);
+}
+
+async function ensureSelfieSegmentation(){
+  if (selfieSegmentation) return selfieSegmentation;
+
+  selfieSegmentation = new SelfieSegmentation({
+    locateFile: (file) =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+  });
+
+selfieSegmentation.setOptions({
+  modelSelection: 1,
+  selfieMode: false
+});
+
+  selfieSegmentation.onResults(drawSegmentedPerson);
+  return selfieSegmentation;
+}
+
+function drawCoverMirrored(ctx2, source, sx, sy, sw, sh, dx, dy, dw, dh){
+  ctx2.save();
+
+  // mirror ให้เหมือน cameraMirror เดิม
+  ctx2.translate(dx + dw, dy);
+  ctx2.scale(-1, 1);
+
+  ctx2.drawImage(
+    source,
+    sx, sy, sw, sh,
+    0, 0, dw, dh
+  );
+
+  ctx2.restore();
+}
+
+function drawSegmentedPerson(results){
+  const {sX, sY, sW, sH, sw, sh} = coverCropRect();
+
+  personCtx.save();
+
+  // รีเซ็ต composite ก่อนทุกเฟรม กันภาพเพี้ยนสะสม
+  personCtx.globalCompositeOperation = 'source-over';
+  personCtx.clearRect(0, 0, sw, sh);
+
+  // 1) วาด mask โดยใช้ crop เดียวกับภาพกล้อง
+  drawCoverMirrored(
+    personCtx,
+    results.segmentationMask,
+    sX, sY, sW, sH,
+    0, 0, sw, sh
+  );
+
+  // 2) ให้แสดงเฉพาะพื้นที่คน
+  personCtx.globalCompositeOperation = 'source-in';
+
+  // 3) วาดภาพจริง โดยใช้ crop เดียวกับ mask 100%
+  drawCoverMirrored(
+    personCtx,
+    results.image,
+    sX, sY, sW, sH,
+    0, 0, sw, sh
+  );
+
+  personCtx.globalCompositeOperation = 'source-over';
+  personCtx.restore();
+}
+
+async function updateSegmentedPerson(now){
+  if (!selfieSegmentation || segmentBusy) return;
+  if (now - lastSegAt < 1000 / SEGMENT_FPS) return;
+
+  lastSegAt = now;
+  segmentBusy = true;
+
+  try{
+    await selfieSegmentation.send({ image: video });
+  }catch(e){}
+
+  segmentBusy = false;
+}
+
+// ===== ปุ่มที่ให้มือแตะได้ในด่าน 1 =====
+const arQDecor = document.getElementById('qDecor');
+const arFastNext = document.getElementById('fastNext');
+const arViewerPrev = document.getElementById('viewerPrev');
+const arViewerNext = document.getElementById('viewerNext');
+const arPlanetInfoToggleBtn = document.getElementById('planetInfoToggleBtn');
+const arPlanetInfoButtons = document.getElementById('planetInfoButtons');
+const arPlanetInfoClose = document.getElementById('planetInfoClose');
+const arPlanetInfoModal = document.getElementById('planetInfoModal');
+
+function fitCanvas(){
+  const dpr = CAM_ON? 1 : Math.max(1, window.devicePixelRatio||1);
+  cvs.width=Math.round(innerWidth*dpr);
+  cvs.height=Math.round(innerHeight*dpr);
+  cvs.style.width=innerWidth+'px';
+  cvs.style.height=innerHeight+'px';
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr,dpr);
+
+  fitPersonCanvas();
+}
+fitCanvas(); addEventListener('resize', fitCanvas);
+
+function coverCropRect(){ const vw=video.videoWidth||640, vh=video.videoHeight||480; const sw=innerWidth, sh=innerHeight; const scale=Math.max(sw/vw, sh/vh); const sW=Math.round(sw/scale), sH=Math.round(sh/scale); const sX=Math.round((vw-sW)/2), sY=Math.round((vh-sH)/2); return {sX,sY,sW,sH,vw,vh,sw,sh} }
+function mapToScreen(nx,ny){ const {sX,sY,sW,sH,vw,vh,sw,sh} = coverCropRect(); const px=nx*vw, py=ny*vh; const u=(px-sX)/sW, v=(py-sY)/sH; let x=u*sw, y=v*sh; x=sw-x; return {x,y} }
+
+const SHOW_HAND_BALL=false;
+const lastHitAt=new WeakMap();
+const HIT_LOCK_MS=650;
+function circleIntersectsRect(cx,cy,r, rc){ const nx=Math.max(rc.left, Math.min(cx, rc.right)); const ny=Math.max(rc.top, Math.min(cy, rc.bottom)); const dx=cx-nx, dy=cy-ny; return (dx*dx+dy*dy)<=r*r }
+
+function isVisibleForHand(el){
+  if (!el) return false;
+  const st = getComputedStyle(el);
+  const rc = el.getBoundingClientRect();
+
+  return (
+    st.display !== 'none' &&
+    st.visibility !== 'hidden' &&
+    st.pointerEvents !== 'none' &&
+    rc.width > 0 &&
+    rc.height > 0 &&
+    rc.bottom >= 0 &&
+    rc.right >= 0 &&
+    rc.top <= innerHeight &&
+    rc.left <= innerWidth
+  );
+}
+
+function handClick(el){
+  if (!el || !isVisibleForHand(el)) return;
+
+  const t = performance.now();
+  const last = lastHitAt.get(el) || 0;
+  if (t - last < HIT_LOCK_MS) return;
+
+  lastHitAt.set(el, t);
+  el.click();
+}
+
+function hitByCircle(center, r){
+  const targets = [
+    ...document.querySelectorAll('.option.circle'),
+
+    arFastNext,
+
+    // ด่าน 1: ปุ่มเปลี่ยนดาว
+    arViewerPrev,
+    arViewerNext,
+
+    // ด่าน 1: ปุ่มข้อมูลซ้ายล่าง
+    arPlanetInfoToggleBtn,
+
+    // ด่าน 1: ปุ่มข้อมูล 3 ปุ่ม
+    ...document.querySelectorAll('.planet-info-btn'),
+
+    // ด่าน 1: ปุ่มปิดหน้าต่าง
+    arPlanetInfoClose
+  ].filter(Boolean);
+
+  for (const n of targets){
+    if (!isVisibleForHand(n)) continue;
+
+    const rc = n.getBoundingClientRect();
+
+    if (circleIntersectsRect(center.x, center.y, r, rc)){
+      handClick(n);
+      break;
+    }
+  }
+}
+
+async function ensureLandmarker(){ if(landmarker) return landmarker; const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"); landmarker = await PoseLandmarker.createFromOptions(fileset, { baseOptions:{ modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task" }, runningMode:'VIDEO', numPoses:1, minPoseDetectionConfidence:.35, minPosePresenceConfidence:.35, minTrackingConfidence:.35 }); return landmarker }
+function drawHandBall(elbowIdx, wristIdx, lm){ if(!lm[elbowIdx]||!lm[wristIdx]) return null; const elbow = mapToScreen(lm[elbowIdx].x, lm[elbowIdx].y); const wrist = mapToScreen(lm[wristIdx].x, lm[wristIdx].y); const r=24; const L=Math.max(1, Math.hypot(wrist.x-elbow.x, wrist.y-elbow.y)); const ux=(wrist.x-elbow.x)/L, uy=(wrist.y-elbow.y)/L; const HAND_PUSH=1.5, PUSH_PX=6; const center={ x: wrist.x + ux*(r*HAND_PUSH+PUSH_PX), y: wrist.y + uy*(r*HAND_PUSH+PUSH_PX) }; if(SHOW_HAND_BALL){ ctx.beginPath(); ctx.arc(center.x,center.y,r,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#fff'; ctx.stroke(); } hitByCircle(center, r*.95); return center }
+function drawPoseAndColliders(res){ const sw=innerWidth, sh=innerHeight; ctx.clearRect(0,0,sw,sh); if(!res?.landmarks?.length) return; const lm=res.landmarks[0]; drawHandBall(13,15,lm); drawHandBall(14,16,lm) }
+
+function runLoop(){
+  const step=()=>{
+    if(!video.videoWidth){
+      raf=requestAnimationFrame(step);
+      return;
+    }
+
+    const now=performance.now();
+
+    try{
+      // วาดเฉพาะคนลง personCanvas
+      updateSegmentedPerson(now);
+
+      // ระบบสัมผัสมือเดิม ไม่แตะต้อง
+      const {sX,sY,sW,sH}=coverCropRect();
+      detectCtx.drawImage(video, sX,sY,sW,sH, 0,0, detectCanvas.width, detectCanvas.height);
+      const res=landmarker.detectForVideo(detectCanvas, now);
+      drawPoseAndColliders(res);
+    }catch(e){}
+
+    raf=requestAnimationFrame(step);
+  };
+
+  raf=requestAnimationFrame(step);
+}
+
+async function startCamera(){
+  await ensureLandmarker();
+  await ensureSelfieSegmentation();
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 960, height: 540, frameRate: 30, facingMode: 'user' },
+    audio: false
+  });
+
+  video.srcObject=stream;
+  await video.play().catch(()=>{});
+
+  const vw=video.videoWidth||640, vh=video.videoHeight||480;
+  const ratio=vw/vh;
+  detectCanvas.width=DETECT_W;
+  detectCanvas.height=Math.round(DETECT_W/ratio);
+
+  // เปิด video ไว้เป็นต้นทาง แต่ซ่อนภาพเดิม
+  video.style.display='block';
+  video.style.opacity='0';
+
+  // แสดงเฉพาะคนหลังตัดพื้นหลัง
+  personCvs.style.display='block';
+
+  // canvas มือยังทำงานเหมือนเดิม
+  cvs.style.display='block';
+
+  camBtn.textContent='📷 กล้อง: เปิด';
+  CAM_ON=true;
+  fitCanvas();
+  runLoop();
+}
+
+function stopCamera(){
+  cancelAnimationFrame(raf);
+
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream=null;
+  }
+
+  try{ video.pause(); }catch(e){}
+
+  video.removeAttribute('srcObject');
+  video.style.display='none';
+  video.style.opacity='0';
+
+  personCvs.style.display='none';
+  personCtx.clearRect(0,0,innerWidth,innerHeight);
+
+  cvs.style.display='none';
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+
+  camBtn.textContent='📷 กล้อง: ปิด';
+  CAM_ON=false;
+  fitCanvas();
+}
+
+camBtn.addEventListener('click', async ()=>{ if(!stream){ try{ await startCamera() }catch(err){ camBtn.textContent='📷 กล้อง: ไม่ได้รับอนุญาต'; camBtn.disabled=true } } else { stopCamera() } });
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden && stream) stopCamera() });
+
+
+// ===== fitTextOneLine (global helper ใช้ใน spawnLevel3Choice2) =====
+function fitTextOneLine(el, maxSize = 72, minSize = 20){
+  let size = maxSize;
+  el.style.fontSize = size + 'px';
+
+  while(el.scrollWidth > el.clientWidth && size > minSize){
+    size -= 2;
+    el.style.fontSize = size + 'px';
+  }
+}
+
+// (ระบบ preload หลักอยู่ใน runGlobalPreload ที่ผูกกับ window 'load' แล้ว
+//  ไม่ต้องมี IIFE ซ้ำที่นี่ เพราะทำให้โหลดภาพซ้ำและ __ALL_IMAGES_READY__ เด้งก่อนกำหนด)
+
+</script>
+
+<!-- ===== Preload Overlay ===== -->
+<div id="preloadOverlay">
+  <div id="preloadText" style="font-size:20px">กำลังเตรียมข้อมูล… 0%</div>
+  <div style="width:min(80vw,480px); height:10px; background:#ffffff22; border-radius:999px; overflow:hidden">
+    <div id="preloadBar" style="height:100%; width:0%; background:#10b981"></div>
+  </div>
+  <div style="font-size:12px;opacity:.8">...รอสักครู่...</div>
+</div>
+<div id="flashOverlay" aria-hidden="true"></div>
+<div id="emojiMeteorLayer" aria-hidden="true"></div>
+</body>
+</html>
