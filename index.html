@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>นักเดินทางแห่งระบบสุริยะ</title>
+<title>ท่องโลกวิทยศาสตร์ ตอน ระบบสุริยะ</title>
 
 <style>
 /* =========================
@@ -459,8 +459,7 @@ body.level2-mode .option-wrap .opt-cap{
 }
 
 
-/* แคปชันหายตามวง */
-@keyframes capFadeUp { to { transform: translateY(-30px); opacity: 0; } }
+/* แคปชันหายตามวง (capFadeUp ถูก define แล้วด้านบน) */
 .option-wrap.faded .opt-cap{ animation: capFadeUp 560ms ease forwards; }
 .option-wrap.chosen .opt-cap{ animation: capFadeUp 620ms ease forwards; }
 
@@ -1427,7 +1426,10 @@ body.level3-mode #fastNext{
   width:100vw;
   height:100vh;
 
-  z-index:15000; /* 🔥 ดันขึ้นหน้าสุด */
+  /* อยู่ด้านหลังสุด: เหนือพื้นหลังเกม แต่ต่ำกว่า UI ทั้งหมด
+     (camCanvas=2, game=3, qBox/ตัวเลือก/ปุ่ม=11000+)
+     เพื่อไม่ให้ภาพคนบังรูปสัตว์/คำถาม/ปุ่มในเกม */
+  z-index:1;
 
   pointer-events:none; /* สำคัญ ห้ามลบ */
   display:none;
@@ -2396,10 +2398,21 @@ function showLevel1Viewer(){
   activeViewerSlot = 'A';
   level1Animating = false;
 
-  viewerImgA.className = 'viewer-photo is-active';
+  viewerImgA.className = 'viewer-photo';
+  viewerImgA.style.opacity = '0'; // ซ่อนก่อน รอโหลด
   viewerImgB.className = 'viewer-photo';
 
-  viewerImgA.src = LEVEL1_PLANETS[level1Index];
+  const firstSrc = LEVEL1_PLANETS[level1Index];
+  preloadOne(firstSrc).then(() => {
+    const img = new Image();
+    img.src = firstSrc;
+    const show = () => {
+      viewerImgA.src = firstSrc;
+      viewerImgA.className = 'viewer-photo is-active';
+      viewerImgA.style.opacity = '';
+    };
+    img.decode ? img.decode().catch(() => {}).finally(show) : show();
+  });
   viewerImgB.src = '';
 
   syncLevel1Nav();
@@ -2426,37 +2439,48 @@ function updateLevel1Viewer(step){
 
   const goNext = step > 0;
 
-  nextImg.src = LEVEL1_PLANETS[newIndex];
+  // ซ่อนรูปใหม่ก่อน ให้โหลดเสร็จก่อนแสดง
+  nextImg.style.opacity = '0';
+  nextImg.className = 'viewer-photo';
+  currentImg.className = 'viewer-photo is-active';
 
-currentImg.className = 'viewer-photo is-active';
-nextImg.className = 'viewer-photo';
+  const startSlide = () => {
+    void nextImg.offsetWidth; // reflow
 
-// ให้รูปใหม่โหลดตำแหน่งนอกจอก่อนเริ่ม animation
-nextImg.style.opacity = '0';
+    nextImg.style.opacity = '';
 
-// reflow ให้แน่ใจก่อนเริ่ม animation
-void nextImg.offsetWidth;
+    if (goNext){
+      currentImg.classList.add('slide-out-left');
+      nextImg.classList.add('slide-in-left');
+    } else {
+      currentImg.classList.add('slide-out-right');
+      nextImg.classList.add('slide-in-right');
+    }
 
-nextImg.style.opacity = '';
+    const onDone = ()=>{
+      currentImg.className = 'viewer-photo';
+      nextImg.className = 'viewer-photo is-active';
+      activeViewerSlot = (activeViewerSlot === 'A') ? 'B' : 'A';
+      level1Animating = false;
+      syncLevel1Nav();
+      startPlanetInfoRevealTimer(); // ✅ เปลี่ยนดาวเสร็จแล้ว เริ่มนับ 10 วิใหม่
+    };
 
-  if (goNext){
-    currentImg.classList.add('slide-out-left');
-    nextImg.classList.add('slide-in-left');
-  } else {
-    currentImg.classList.add('slide-out-right');
-    nextImg.classList.add('slide-in-right');
-  }
-
-  const onDone = ()=>{
-    currentImg.className = 'viewer-photo';
-    nextImg.className = 'viewer-photo is-active';
-    activeViewerSlot = (activeViewerSlot === 'A') ? 'B' : 'A';
-    level1Animating = false;
-    syncLevel1Nav();
-    startPlanetInfoRevealTimer(); // ✅ เปลี่ยนดาวเสร็จแล้ว เริ่มนับ 10 วิใหม่
+    nextImg.addEventListener('animationend', onDone, { once:true });
   };
 
-  nextImg.addEventListener('animationend', onDone, { once:true });
+  // ใช้ cache ถ้าโหลดแล้ว มิฉะนั้นรอ onload
+  const cached = __imgMemo.get(LEVEL1_PLANETS[newIndex]);
+  if (cached) {
+    nextImg.src = LEVEL1_PLANETS[newIndex];
+    // รูปน่าจะอยู่ใน browser cache แล้ว – รอ 1 เฟรมก็พอ
+    requestAnimationFrame(startSlide);
+  } else {
+    nextImg.src = '';
+    nextImg.onload = () => { nextImg.onload = null; startSlide(); };
+    nextImg.onerror = () => { nextImg.onerror = null; startSlide(); };
+    nextImg.src = LEVEL1_PLANETS[newIndex];
+  }
 }
 
 viewerPrev?.addEventListener('click', (e)=>{
@@ -2510,15 +2534,13 @@ function preloadCurrentPlanetInfoImages(){
   currentPlanetInfoLoaded = false;
 
   const jobs = urls.map(src => {
-    if (typeof preloadOne === 'function') {
-      return preloadOne(src);
-    }
-
-    return new Promise(resolve => {
+    // ใช้ preloadOne (มี cache + retry) แล้วต่อด้วย decode เพื่อให้ GPU พร้อม
+    return preloadOne(src).then(ok => {
+      if (!ok) return false;
+      // decode ภาพเพื่อให้พร้อมแสดงทันที ไม่มีกระตุก
       const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
       img.src = src;
+      return img.decode ? img.decode().catch(() => true) : Promise.resolve(true);
     });
   });
 
@@ -2573,17 +2595,18 @@ function openPlanetInfoModal(infoKey){
     planetInfoBody.innerHTML = '';
   }
 
-  const [img1, img2] = getCurrentPlanetInfoImages(infoKey);
+  const [img1src, img2src] = getCurrentPlanetInfoImages(infoKey);
 
   if (planetInfoGallery) planetInfoGallery.style.display = '';
 
+  // ภาพถูก preload ไว้แล้วใน __imgMemo – ใส่ src ตรงได้เลย
   if (planetInfoImage1) {
-    planetInfoImage1.src = img1;
+    planetInfoImage1.src = img1src;
     planetInfoImage1.style.display = '';
   }
 
   if (planetInfoImage2) {
-    planetInfoImage2.src = img2;
+    planetInfoImage2.src = img2src;
     planetInfoImage2.style.display = '';
   }
 
@@ -3295,7 +3318,11 @@ function preloadOne(src, timeout=8000, tries=2){
   if(__imgMemo.has(src)) return __imgMemo.get(src);
   const runner = (attempt)=> new Promise(resolve=>{
     const img = new Image(); let done=false;
-    const settle = ok=>{ if(done) return; done=true; resolve(ok); };
+    const settle = ok=>{ if(done) return; done=true;
+      // ถ้าโหลดสำเร็จ decode เพื่อให้ GPU พร้อม (non-blocking)
+      if(ok && img.decode){ img.decode().catch(()=>{}).finally(()=>resolve(true)); }
+      else { resolve(ok); }
+    };
     const t = setTimeout(()=>{ img.onload=img.onerror=null; settle(false) }, timeout);
     img.onload = ()=>{ clearTimeout(t); settle(true) };
     img.onerror= ()=>{ clearTimeout(t); (attempt<tries)? setTimeout(()=>runner(attempt+1).then(resolve), 250): settle(false) };
@@ -3327,6 +3354,7 @@ function collectAllGameImages(){
     "image/state1.png",
     "image/state2.png",
     "image/state3.png",
+    "objects2/object0.png",
   ].forEach(src => urls.add(src));
 
   // ดึงจาก MATERIAL_IMG ทั้งก้อน
@@ -3336,7 +3364,16 @@ function collectAllGameImages(){
     });
   }
 
-  // ด่าน 1
+  // ด่าน 1 – รูปดาวเคราะห์และ planetinfo ใน objects2
+  for (let i = 1; i <= 10; i++) {
+    urls.add(`objects2/planetinfo${i}.png`);
+    // รูปข้อมูลดาว 3 หมวด × 2 รูป ใน folder info{n}/
+    ['basic','physical','orbit'].forEach(key => {
+      urls.add(`info${i}/p${i}-${key}-1.png`);
+      urls.add(`info${i}/p${i}-${key}-2.png`);
+    });
+  }
+
   if (typeof LEVEL1_BINDINGS !== "undefined") {
     Object.values(LEVEL1_BINDINGS).forEach(arr => {
       (arr || []).forEach(o => {
@@ -3370,7 +3407,7 @@ function collectAllGameImages(){
     });
   }
 
-  return [...urls].map(p => new URL(p, location.href).href);
+  return [...urls].filter(Boolean).map(p => new URL(p, location.href).href);
 }
 
 function bindPreloadProgress(){
@@ -3766,8 +3803,6 @@ function stopGameTimerHard(){
 }
 
 function startGame(){
-  (async()=>{ while(!window.__ALL_IMAGES_READY__) await new Promise(r=>setTimeout(r,120)); })();
-
   document.body.classList.add('in-game');
   running = true;
   ended = false;
@@ -3809,7 +3844,17 @@ function startGame(){
     fastNext.style.display = '';
   }
 
-  nextRound();
+  // รอให้ภาพพร้อมก่อนเริ่มรอบแรก (ถ้ายังไม่พร้อม)
+  if (window.__ALL_IMAGES_READY__) {
+    nextRound();
+  } else {
+    (async () => {
+      while (!window.__ALL_IMAGES_READY__) {
+        await new Promise(r => setTimeout(r, 80));
+      }
+      if (!ended) nextRound();
+    })();
+  }
 }
 
 
@@ -3841,6 +3886,7 @@ function resetState(){
   stopClockUI();
 
   usedLevel2Questions = [];
+  usedLevel3Questions = [];
   usedLevel4Questions = [];
 
   if (clockEl) clockEl.textContent='02:00';
@@ -3981,6 +4027,42 @@ st.textContent =
       // ปุ่มเริ่ม / นับถอยหลัง
       startBtn.style.display='inline-block'; startBtn.disabled=false; startBtn.style.pointerEvents='auto';
       countdownEl.style.display='none'; countdownEl.textContent='3';
+
+      // ===== Preload รูปเฉพาะด่านที่เลือก ขณะรอ countdown =====
+      (function preloadLevelImages(lv){
+        const urls = new Set();
+        if (lv === 1) {
+          // planet viewer + info images
+          for (let i = 1; i <= 10; i++) {
+            urls.add(`objects1/planet${i}.png`);
+            urls.add(`objects2/planetinfo${i}.png`);
+            ['basic','physical','orbit'].forEach(key => {
+              urls.add(`info${i}/p${i}-${key}-1.png`);
+              urls.add(`info${i}/p${i}-${key}-2.png`);
+            });
+          }
+        } else if (lv === 2) {
+          if (typeof MATERIAL_IMG !== "undefined") {
+            Object.values(MATERIAL_IMG).forEach(src => { if(src) urls.add(src); });
+          }
+          if (typeof OBJECTS !== "undefined") {
+            OBJECTS.forEach(o => { if(o && o.img) urls.add(o.img); });
+          }
+        } else if (lv === 3) {
+          // ด่าน 3 ใช้แค่ตัวเลือกข้อความ ไม่มีรูปตัวเลือก
+        } else if (lv === 4) {
+          if (typeof MATERIAL_IMG !== "undefined") {
+            Object.values(MATERIAL_IMG).forEach(src => { if(src) urls.add(src); });
+          }
+          if (typeof LEVEL4_BANK !== "undefined") {
+            LEVEL4_BANK.forEach(q => (q.answers||[]).forEach(a => { if(a && a.img) urls.add(a.img); }));
+          }
+        }
+        const list = [...urls].filter(Boolean);
+        // preloadOne มี cache ไว้แล้ว จะข้ามรูปที่โหลดไปแล้ว
+        list.forEach(src => preloadOne(src));
+        if (list.length) console.log(`🎯 level ${lv} targeted preload:`, list.length, 'images');
+      })(window.currentLevel);
     });
   });
 
@@ -4343,56 +4425,7 @@ camBtn.addEventListener('click', async ()=>{ if(!stream){ try{ await startCamera
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden && stream) stopCamera() });
 
 
-// ===== PRELOAD IMAGES =====
-(function preloadImages(){
-  const urls = new Set();
-
-  // ---------- รูป UI / พื้นหลัง / หน้าเมนู ----------
-  [
-    "image/background2.png",
-    "image/welcomepage.png",
-    "image/banner2.png",
-    "image/guide.png",
-    "image/button1.png",
-    "image/button2.png",
-    "objects2/object0.png",
-    "image/state1.png",
-    "image/state2.png",
-    "image/state3.png"
-  ].forEach(src => urls.add(src));
-
-  // ---------- ด่าน 1 ----------
-  for (let i = 1; i <= 10; i++) {
-    urls.add(`objects1/planet${i}.png`);
-    urls.add(`objects2/planetinfo${i}.png`);
-  }
-
-  if (typeof LEVEL1_BINDINGS !== "undefined") {
-    Object.values(LEVEL1_BINDINGS).forEach(arr => {
-      (arr || []).forEach(o => {
-        if (o && o.img) urls.add(o.img);
-      });
-    });
-  }
-
-  // ---------- ด่าน 2 ----------
-  if (typeof LEVEL2_BINDINGS !== "undefined") {
-    Object.values(LEVEL2_BINDINGS).forEach(arr => {
-      (arr || []).forEach(o => {
-        if (o && o.img) urls.add(o.img);
-      });
-    });
-  }
-
-  // ---------- ด่าน 3 ----------
-  if (typeof LEVEL3_BINDINGS !== "undefined") {
-    Object.values(LEVEL3_BINDINGS).forEach(arr => {
-      (arr || []).forEach(o => {
-        if (o && o.img) urls.add(o.img);
-      });
-    });
-  }
-
+// ===== fitTextOneLine (global helper ใช้ใน spawnLevel3Choice2) =====
 function fitTextOneLine(el, maxSize = 72, minSize = 20){
   let size = maxSize;
   el.style.fontSize = size + 'px';
@@ -4403,47 +4436,8 @@ function fitTextOneLine(el, maxSize = 72, minSize = 20){
   }
 }
 
-  // ---------- preload จริง ----------
-  const list = [...urls];
-  let loaded = 0;
-  const total = list.length || 1;
-
-  const preloadText = document.getElementById('preloadText');
-  const preloadBar  = document.getElementById('preloadBar');
-  const preloadOverlay = document.getElementById('preloadOverlay');
-
-  function updateProgress(){
-    const pct = Math.round((loaded / total) * 100);
-    if (preloadText) preloadText.textContent = `กำลังเตรียมข้อมูล… ${pct}%`;
-    if (preloadBar) preloadBar.style.width = pct + '%';
-
-    if (loaded >= total) {
-      window.__ALL_IMAGES_READY__ = true;
-      setTimeout(() => {
-        if (preloadOverlay) preloadOverlay.style.display = 'none';
-      }, 150);
-    }
-  }
-
-  if (!list.length) {
-    window.__ALL_IMAGES_READY__ = true;
-    if (preloadOverlay) preloadOverlay.style.display = 'none';
-    return;
-  }
-
-  list.forEach(src => {
-    const img = new Image();
-
-    img.onload = img.onerror = () => {
-      loaded++;
-      updateProgress();
-    };
-
-    img.src = src;
-  });
-
-  console.log("✅ preload images:", list.length, list);
-})();
+// (ระบบ preload หลักอยู่ใน runGlobalPreload ที่ผูกกับ window 'load' แล้ว
+//  ไม่ต้องมี IIFE ซ้ำที่นี่ เพราะทำให้โหลดภาพซ้ำและ __ALL_IMAGES_READY__ เด้งก่อนกำหนด)
 
 </script>
 
